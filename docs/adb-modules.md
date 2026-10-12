@@ -240,10 +240,20 @@ one simply has no update check here.
 
 ## Getting listed
 
-The modules screen's cloud icon finds modules the way the format's other implementations do: a GitHub
-search for the **`shevery-modules`** topic. Put that topic on your repository and it is found; the
-card's install takes the newest release and installs the **first asset ending in `.zip`**, so attach
-one zip to the release (a repository with several zips, or none, will not install as expected).
+The modules screen's cloud icon finds modules the way the format's other implementations do: a
+GitHub search for the topic an author puts on their repository. Any of **`shevery-modules`**,
+**`shizuku-modules`** or **`shizuku-next-modules`** works - they are the same set of modules, tagged
+for whichever implementation the author wrote against - and a repository carrying more than one of
+them is still listed once.
+
+A topic is a claim anyone can make, so every repository found is checked before it is offered: it
+has to answer with a `module.prop` at its **root**, read by the same parser the installer uses (an
+`id` that could be a directory name, and a name to show). A repository that keeps its module in a
+subdirectory, or that only mentions the topic in its description, is not a module and is not listed.
+
+The card's install takes the newest release and installs the **first asset ending in `.zip`**, so
+attach one zip to the release (a repository with several zips, or none, will not install as
+expected).
 
 The **More apps** list under Labs is a different thing: it is a directory of apps that use Shizuku,
 not of modules.
