@@ -459,183 +459,188 @@ private fun MainTabs(
             }
         }
 
-        // The bar's own band, and the fade the pages run into. It is drawn here rather than
-        // by the pages for two reasons: it leaves with the bar, and it is already there
-        // before a page has scrolled a long list sitting at its top still has rows under
-        // the bar, which a scrim that waited for a scroll would leave with a hard edge.
-        // A gradient and not a blur: blurring a scrolling page means drawing it into an
-        // offscreen layer and re-blurring it every frame.
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                // Before the insets, so the fade reaches the bottom of the screen instead of
-                // stopping at the top of the gesture area: below the bar is page the bar is
-                // floating over too. It lands on the colour the pages themselves draw, so it
-                // dissolves into them in every theme, black included.
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.Transparent,
-                        1f to MaterialTheme.colorScheme.background
-                    )
-                )
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(bottom = FloatingToolbarDefaults.ScreenOffset),
-            contentAlignment = Alignment.TopCenter
-        ) {
-            // The bar hides by moving down by its own height, and it stands clear of the
-            // gesture area — so it came to rest exactly that gap above the bottom of the
-            // screen with a strip of itself still showing. Clipping this box to its own edge
-            // cuts that strip off, and leaves the library's own timing alone: the box is
-            // exactly the bar's height, so at rest nothing is cut, and on the way down all of
-            // it is.
-            // Centre-aligned, and so is the band: a full-width box with the bar in it would
-            // otherwise leave the bar sitting against its left edge.
+        // A module's own page, its action console and the catalog take the whole tab, and the
+        // bar leaves with them: a floating bar sitting over somebody else's page is this app's
+        // own furniture showing through. Its back arrow - or the back gesture - brings it back.
+        if (!modulesFullscreen) {
+            // The bar's own band, and the fade the pages run into. It is drawn here rather than
+            // by the pages for two reasons: it leaves with the bar, and it is already there
+            // before a page has scrolled a long list sitting at its top still has rows under
+            // the bar, which a scrim that waited for a scroll would leave with a hard edge.
+            // A gradient and not a blur: blurring a scrolling page means drawing it into an
+            // offscreen layer and re-blurring it every frame.
             Box(
-                modifier = Modifier.fillMaxWidth().clipToBounds(),
-                contentAlignment = Alignment.Center
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    // Before the insets, so the fade reaches the bottom of the screen instead of
+                    // stopping at the top of the gesture area: below the bar is page the bar is
+                    // floating over too. It lands on the colour the pages themselves draw, so it
+                    // dissolves into them in every theme, black included.
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.Transparent,
+                            1f to MaterialTheme.colorScheme.background
+                        )
+                    )
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .padding(bottom = FloatingToolbarDefaults.ScreenOffset),
+                contentAlignment = Alignment.TopCenter
             ) {
-                // Where each tab sits on the bar, so the selected pill can be drawn between
-                // them: one shape that travels reads as a move, where a container colour that
-                // appears on the new tab and leaves the old one reads as a flicker. The pill
-                // is measured from the tab itself, so it is the tab's own size wherever the
-                // bar's padding puts it.
-                val selectedBounds = pill.bounds[pagerState.currentPage]
-                val pillSpec = spring<Float>(
-                    dampingRatio = Spring.DampingRatioLowBouncy,
-                    stiffness = Spring.StiffnessLow
-                )
-                LaunchedEffect(selectedBounds) {
-                    val bounds = selectedBounds ?: return@LaunchedEffect
-                    if (pill.placed) {
-                        // Both ends of the move at once, which is the one thing that would have
-                        // been lost to doing this by hand: a tab that grows while it slides.
-                        launch { pill.left.animateTo(bounds.left, pillSpec) }
-                        launch { pill.width.animateTo(bounds.width, pillSpec) }
-                    } else {
-                        pill.left.snapTo(bounds.left)
-                        pill.width.snapTo(bounds.width)
-                        pill.placed = true
-                    }
-                }
-                val pillColor = MaterialTheme.colorScheme.secondaryContainer
-
-                HorizontalFloatingToolbar(
-                    expanded = true,
-                    modifier = Modifier,
-                    contentPadding = PaddingValues(0.dp),
-                    scrollBehavior = scrollBehavior
+                // The bar hides by moving down by its own height, and it stands clear of the
+                // gesture area — so it came to rest exactly that gap above the bottom of the
+                // screen with a strip of itself still showing. Clipping this box to its own edge
+                // cuts that strip off, and leaves the library's own timing alone: the box is
+                // exactly the bar's height, so at rest nothing is cut, and on the way down all of
+                // it is.
+                // Centre-aligned, and so is the band: a full-width box with the bar in it would
+                // otherwise leave the bar sitting against its left edge.
+                Box(
+                    modifier = Modifier.fillMaxWidth().clipToBounds(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .heightIn(min = FloatingToolbarDefaults.ContainerSize)
-                            .then(
-                                if (LocalAmoledTheme.current) {
-                                    Modifier.border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.outlineVariant,
-                                        shape = FloatingToolbarDefaults.ContainerShape
-                                    )
-                                } else {
-                                    Modifier
-                                }
-                            )
-                            .padding(FloatingToolbarDefaults.ContentPadding)
-                            // Last in the chain on purpose: the padding sits outside the Row, so
-                            // drawing here happens in the same space the tabs are placed in, and
-                            // their measured bounds can be used as they are.
-                            .drawWithContent {
-                                val bounds = selectedBounds
-                                val left = pill.left.value
-                                val width = pill.width.value
-                                if (bounds != null && width > 0f) {
-                                    drawRoundRect(
-                                        color = pillColor,
-                                        topLeft = Offset(left, bounds.top),
-                                        size = Size(width, bounds.height),
-                                        cornerRadius = CornerRadius(bounds.height / 2f)
-                                    )
-                                }
-                                drawContent()
-                            },
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Where each tab sits on the bar, so the selected pill can be drawn between
+                    // them: one shape that travels reads as a move, where a container colour that
+                    // appears on the new tab and leaves the old one reads as a flicker. The pill
+                    // is measured from the tab itself, so it is the tab's own size wherever the
+                    // bar's padding puts it.
+                    val selectedBounds = pill.bounds[pagerState.currentPage]
+                    val pillSpec = spring<Float>(
+                        dampingRatio = Spring.DampingRatioLowBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                    LaunchedEffect(selectedBounds) {
+                        val bounds = selectedBounds ?: return@LaunchedEffect
+                        if (pill.placed) {
+                            // Both ends of the move at once, which is the one thing that would have
+                            // been lost to doing this by hand: a tab that grows while it slides.
+                            launch { pill.left.animateTo(bounds.left, pillSpec) }
+                            launch { pill.width.animateTo(bounds.width, pillSpec) }
+                        } else {
+                            pill.left.snapTo(bounds.left)
+                            pill.width.snapTo(bounds.width)
+                            pill.placed = true
+                        }
+                    }
+                    val pillColor = MaterialTheme.colorScheme.secondaryContainer
+
+                    HorizontalFloatingToolbar(
+                        expanded = true,
+                        modifier = Modifier,
+                        contentPadding = PaddingValues(0.dp),
+                        scrollBehavior = scrollBehavior
                     ) {
-                        tabs.forEachIndexed { index, tab ->
-                            val selected = pagerState.currentPage == index
-                            // The icon's colour is animated rather than handed to the button's
-                            // checked state, because the pill behind it is still travelling when
-                            // the state flips: a flip would leave the icon dark on a pill that has
-                            // not arrived yet.
-                            val iconColor by animateColorAsState(
-                                targetValue = if (selected) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                animationSpec = MaterialTheme.motionScheme
-                                    .defaultEffectsSpec<Color>(),
-                                label = "tabIconColor"
-                            )
-                            ToggleButton(
-                                checked = selected,
-                                modifier = Modifier.onGloballyPositioned {
-                                    pill.bounds[index] = it.boundsInParent()
-                                },
-                            onCheckedChange = {
-                                // Straight to the page, not through the ones between: the pager
-                                // composes what it scrolls past, so going from Settings to Home
-                                // started loading the Manage tab's six hundred apps on the way.
-                                // Swiping still animates, because that is the gesture.
-                                if (!selected) scope.launch { pagerState.scrollToPage(index) }
-                            },
-                                shapes = ToggleButtonShapes(
-                                    shape = CircleShape,
-                                    pressedShape = CircleShape,
-                                    checkedShape = CircleShape
-                                ),
-                                colors = ToggleButtonDefaults.toggleButtonColors(
-                                    // Transparent either way: the pill is drawn by the bar, so the
-                                    // button must not draw a second one under it.
-                                    containerColor = Color.Transparent,
-                                    contentColor = iconColor,
-                                    checkedContainerColor = Color.Transparent,
-                                    checkedContentColor = iconColor
-                                )
-                            ) {
-                                // Icons only, with the name kept for anyone reading it aloud: a
-                                // label that grows out of the selected tab makes the bar wider
-                                // and taller, and the pages under it move. The filled pill says
-                                // which tab is current, and the outlined icon resolving into the
-                                // filled one says the pill has arrived.
-                                // The count of granted apps rides on the Apps tab as a badge: it
-                                // is the one number about the service that changes on its own,
-                                // and drawn over the icon rather than beside it, so the bar's
-                                // size does not depend on how large the number is.
-                                BadgedBox(
-                                    badge = {
-                                        if (index == 1 && grantedCount > 0) {
-                                            // The accent at its low-emphasis tone rather than
-                                            // the badge's own default, which is the error red:
-                                            // a count of granted apps is not a problem, and
-                                            // the container role is the accent's quiet one.
-                                            Badge(
-                                                containerColor = MaterialTheme.colorScheme
-                                                    .primaryContainer
-                                            ) { Text(grantedCount.toString()) }
-                                        }
-                                    }
-                                ) {
-                                    Crossfade(
-                                        targetState = selected,
-                                        animationSpec = MaterialTheme.motionScheme
-                                            .defaultEffectsSpec<Float>(),
-                                        label = "tabIcon"
-                                    ) { isSelected ->
-                                        Icon(
-                                            if (isSelected) tab.selectedIcon else tab.unselectedIcon,
-                                            contentDescription = stringResource(tab.label)
+                        Row(
+                            modifier = Modifier
+                                .heightIn(min = FloatingToolbarDefaults.ContainerSize)
+                                .then(
+                                    if (LocalAmoledTheme.current) {
+                                        Modifier.border(
+                                            width = 1.dp,
+                                            color = MaterialTheme.colorScheme.outlineVariant,
+                                            shape = FloatingToolbarDefaults.ContainerShape
                                         )
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .padding(FloatingToolbarDefaults.ContentPadding)
+                                // Last in the chain on purpose: the padding sits outside the Row, so
+                                // drawing here happens in the same space the tabs are placed in, and
+                                // their measured bounds can be used as they are.
+                                .drawWithContent {
+                                    val bounds = selectedBounds
+                                    val left = pill.left.value
+                                    val width = pill.width.value
+                                    if (bounds != null && width > 0f) {
+                                        drawRoundRect(
+                                            color = pillColor,
+                                            topLeft = Offset(left, bounds.top),
+                                            size = Size(width, bounds.height),
+                                            cornerRadius = CornerRadius(bounds.height / 2f)
+                                        )
+                                    }
+                                    drawContent()
+                                },
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            tabs.forEachIndexed { index, tab ->
+                                val selected = pagerState.currentPage == index
+                                // The icon's colour is animated rather than handed to the button's
+                                // checked state, because the pill behind it is still travelling when
+                                // the state flips: a flip would leave the icon dark on a pill that has
+                                // not arrived yet.
+                                val iconColor by animateColorAsState(
+                                    targetValue = if (selected) {
+                                        MaterialTheme.colorScheme.onSecondaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                    animationSpec = MaterialTheme.motionScheme
+                                        .defaultEffectsSpec<Color>(),
+                                    label = "tabIconColor"
+                                )
+                                ToggleButton(
+                                    checked = selected,
+                                    modifier = Modifier.onGloballyPositioned {
+                                        pill.bounds[index] = it.boundsInParent()
+                                    },
+                                onCheckedChange = {
+                                    // Straight to the page, not through the ones between: the pager
+                                    // composes what it scrolls past, so going from Settings to Home
+                                    // started loading the Manage tab's six hundred apps on the way.
+                                    // Swiping still animates, because that is the gesture.
+                                    if (!selected) scope.launch { pagerState.scrollToPage(index) }
+                                },
+                                    shapes = ToggleButtonShapes(
+                                        shape = CircleShape,
+                                        pressedShape = CircleShape,
+                                        checkedShape = CircleShape
+                                    ),
+                                    colors = ToggleButtonDefaults.toggleButtonColors(
+                                        // Transparent either way: the pill is drawn by the bar, so the
+                                        // button must not draw a second one under it.
+                                        containerColor = Color.Transparent,
+                                        contentColor = iconColor,
+                                        checkedContainerColor = Color.Transparent,
+                                        checkedContentColor = iconColor
+                                    )
+                                ) {
+                                    // Icons only, with the name kept for anyone reading it aloud: a
+                                    // label that grows out of the selected tab makes the bar wider
+                                    // and taller, and the pages under it move. The filled pill says
+                                    // which tab is current, and the outlined icon resolving into the
+                                    // filled one says the pill has arrived.
+                                    // The count of granted apps rides on the Apps tab as a badge: it
+                                    // is the one number about the service that changes on its own,
+                                    // and drawn over the icon rather than beside it, so the bar's
+                                    // size does not depend on how large the number is.
+                                    BadgedBox(
+                                        badge = {
+                                            if (index == 1 && grantedCount > 0) {
+                                                // The accent at its low-emphasis tone rather than
+                                                // the badge's own default, which is the error red:
+                                                // a count of granted apps is not a problem, and
+                                                // the container role is the accent's quiet one.
+                                                Badge(
+                                                    containerColor = MaterialTheme.colorScheme
+                                                        .primaryContainer
+                                                ) { Text(grantedCount.toString()) }
+                                            }
+                                        }
+                                    ) {
+                                        Crossfade(
+                                            targetState = selected,
+                                            animationSpec = MaterialTheme.motionScheme
+                                                .defaultEffectsSpec<Float>(),
+                                            label = "tabIcon"
+                                        ) { isSelected ->
+                                            Icon(
+                                                if (isSelected) tab.selectedIcon else tab.unselectedIcon,
+                                                contentDescription = stringResource(tab.label)
+                                            )
+                                        }
                                     }
                                 }
                             }
