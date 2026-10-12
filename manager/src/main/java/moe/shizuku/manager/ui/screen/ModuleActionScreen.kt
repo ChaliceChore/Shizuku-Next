@@ -26,11 +26,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.R
 import moe.shizuku.manager.module.AdbModule
@@ -59,6 +61,7 @@ fun ModuleActionScreen(module: AdbModule, onBack: () -> Unit) {
     var running by remember { mutableStateOf(false) }
     var pendingCommand by remember { mutableStateOf<ModuleCommandRequest?>(null) }
     var approval by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
+    val consoleScroll = rememberScrollState()
 
     val approve: suspend (ModuleCommandRequest) -> Boolean = { request ->
         if (ModuleSettings.isTrusted(module.id)) {
@@ -96,6 +99,14 @@ fun ModuleActionScreen(module: AdbModule, onBack: () -> Unit) {
     // the same path the button takes - a trusted module runs at once, and one that is not trusted
     // gets the command review first.
     LaunchedEffect(Unit) { run() }
+
+    // The console follows the script, because watching something print is the whole reason it is
+    // open: the newest line is the one being watched for. It scrolls whenever the content has
+    // actually grown - maxValue is written once the new text has been measured - rather than a
+    // frame ahead of it, which is a guess that is wrong exactly when a script is chatty.
+    LaunchedEffect(consoleScroll) {
+        snapshotFlow { consoleScroll.maxValue }.collect { consoleScroll.scrollTo(it) }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -149,7 +160,7 @@ fun ModuleActionScreen(module: AdbModule, onBack: () -> Unit) {
                 fontFamily = FontFamily.Monospace,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(consoleScroll)
                     .padding(14.dp)
             )
         }
