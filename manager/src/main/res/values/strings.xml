@@ -415,6 +415,13 @@
     <string name="catalog_loading_release">Looking for the latest release...</string>
     <string name="catalog_no_release">No releases</string>
     <string name="catalog_view_github">View on GitHub</string>
+    <string name="modules_repo_retry">Retry</string>
+    <string name="modules_repo_error">Could not load the repositories.</string>
+    <string name="modules_repo_by_author">by %1$s</string>
+    <string name="modules_repo_latest_version">Latest version</string>
+    <string name="modules_repo_loading">Loading...</string>
+    <string name="modules_repo_sort_stars_low_to_high">Stars (few first)</string>
+    <string name="modules_repo_sort_stars_high_to_low">Stars (many first)</string>
     <string name="modules_find_modules">Find modules</string>
     <string name="modules_install_from_file">Install from a file</string>
     <string name="modules_install_title">Install a module</string>

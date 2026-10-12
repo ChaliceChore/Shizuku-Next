@@ -93,6 +93,17 @@ fun CatalogScreen(
     onBack: () -> Unit,
     onInstalled: () -> Unit,
 ) {
+    // The modules list is their Module Repo screen; this screen is only the apps list now. The
+    // kind is kept so both callers read the same either way.
+    if (kind == CatalogKind.MODULES) {
+        ModuleRepoScreen(
+            installedIds = installedIds,
+            onBack = onBack,
+            onInstalled = onInstalled
+        )
+        return
+    }
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -109,7 +120,7 @@ fun CatalogScreen(
 
     LaunchedEffect(kind) {
         runCatching {
-            if (kind == CatalogKind.MODULES) ModuleCatalog.modules() else ModuleCatalog.index()
+            ModuleCatalog.index()
         }
             .onSuccess { repos = it }
             .onFailure { error = it.message }
@@ -146,11 +157,7 @@ fun CatalogScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
-                Text(
-                    stringResource(
-                        if (kind == CatalogKind.MODULES) R.string.modules_catalog else R.string.catalog_apps_title
-                    )
-                )
+                Text(stringResource(R.string.catalog_apps_title))
             },
             windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
             navigationIcon = {

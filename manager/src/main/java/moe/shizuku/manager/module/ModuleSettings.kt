@@ -49,6 +49,18 @@ object ModuleSettings {
     const val SORT_ACTION_FIRST = "module_sort_action_first"
     const val SORT_WEBUI_FIRST = "module_sort_webui_first"
 
+    /**
+     * The order the find-modules list is shown in.
+     *
+     * Their screen keeps this order under its own keys, which are the same words as the module
+     * list's but a different list: the modules installed here and the repositories to install
+     * from are sorted independently, so they get keys of their own.
+     */
+    const val REPO_SORT_A_TO_Z = "module_repo_sort_a_to_z"
+    const val REPO_SORT_Z_TO_A = "module_repo_sort_z_to_a"
+    const val REPO_SORT_STARS_LOW_TO_HIGH = "module_repo_sort_stars_low_to_high"
+    const val REPO_SORT_STARS_HIGH_TO_LOW = "module_repo_sort_stars_high_to_low"
+
     fun sortFlag(key: String, default: Boolean = false): Boolean =
         ShizukuSettings.getPreferences().getBoolean(key, default)
 
