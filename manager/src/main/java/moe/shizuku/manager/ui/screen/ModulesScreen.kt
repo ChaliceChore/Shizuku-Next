@@ -102,6 +102,7 @@ import moe.shizuku.manager.module.ModuleSettings
 import moe.shizuku.manager.module.ModuleUpdate
 import moe.shizuku.manager.ui.component.PillButton
 import moe.shizuku.manager.ui.component.PillButtonQuiet
+import moe.shizuku.manager.ui.component.moduleSwipeBack
 
 /**
  * The modules this app has installed.
@@ -224,27 +225,34 @@ fun ModulesScreen(
     DisposableEffect(Unit) { onDispose { onFullscreenChange(false) } }
 
     // These take the screen rather than opening over the list: a page, a console and a catalog are
-    // not dialogs.
+    // not dialogs. Each of them also answers a right swipe the way its own back arrow does, since
+    // the tab pager has given up its horizontal swipes while one of them is up.
     webUiFor?.let { module ->
-        ModuleWebUiScreen(module = module, onBack = { webUiFor = null })
+        Box(modifier = Modifier.fillMaxSize().moduleSwipeBack { webUiFor = null }) {
+            ModuleWebUiScreen(module = module, onBack = { webUiFor = null })
+        }
         return
     }
 
     actionFor?.let { module ->
-        ModuleActionScreen(module = module, onBack = { actionFor = null })
+        Box(modifier = Modifier.fillMaxSize().moduleSwipeBack { actionFor = null }) {
+            ModuleActionScreen(module = module, onBack = { actionFor = null })
+        }
         return
     }
 
     if (catalogOpen) {
-        CatalogScreen(
-            kind = CatalogKind.MODULES,
-            installedIds = modules.map { it.id }.toSet(),
-            onBack = { catalogOpen = false },
-            onInstalled = {
-                catalogOpen = false
-                reload()
-            }
-        )
+        Box(modifier = Modifier.fillMaxSize().moduleSwipeBack { catalogOpen = false }) {
+            CatalogScreen(
+                kind = CatalogKind.MODULES,
+                installedIds = modules.map { it.id }.toSet(),
+                onBack = { catalogOpen = false },
+                onInstalled = {
+                    catalogOpen = false
+                    reload()
+                }
+            )
+        }
         return
     }
 
