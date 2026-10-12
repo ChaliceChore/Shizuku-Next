@@ -3,7 +3,6 @@ package moe.shizuku.manager.ui.screen
 import android.content.Context
 import android.net.Uri
 import android.os.Build
-import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -856,17 +855,11 @@ private fun detail(output: String): String = output.lineSequence()
  *
  * Returns the path, or null when the file could not be read at all.
  */
-private fun stage(context: Context, uri: Uri): String? = runCatching {
+private suspend fun stage(context: Context, uri: Uri): String? = runCatching {
     val name = displayName(context, uri) ?: "package.apk"
-    val target = "/data/local/tmp/$name"
 
     val input = context.contentResolver.openInputStream(uri) ?: return null
-    input.use { source ->
-        ParcelFileDescriptor.AutoCloseOutputStream(PrivilegedFiles.openWrite(target)).use { sink ->
-            source.copyTo(sink)
-        }
-    }
-    target
+    input.use { source -> AppInstall.stage(source, name) }
 }.getOrNull()
 
 private fun displayName(context: Context, uri: Uri): String? = runCatching {

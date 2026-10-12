@@ -59,14 +59,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.R
+import moe.shizuku.manager.files.PrivilegedFiles
 import moe.shizuku.manager.install.AppInstall
 import moe.shizuku.manager.module.ModuleCatalog
+import moe.shizuku.manager.module.ModuleCatalogException
 import moe.shizuku.manager.module.ModuleRepo
 import moe.shizuku.manager.ui.component.PillButton
 import moe.shizuku.manager.ui.component.PillButtonQuiet
@@ -264,24 +265,31 @@ fun CatalogScreen(
     /**
      * Installs the newest apk of [repo], from the release the index carries.
      *
-     * It is downloaded to the cache first because the installer hands the shell a path rather than
-     * a stream, and a package is tens of megabytes: it goes to a file as it arrives rather than
-     * being held whole on the way.
+     * The download is streamed straight into the shell's own directory, the same staging the
+     * Installer screen uses for a file somebody picked. That is not a detail: `pm` is run by the
+     * shell, so a package sitting in this app's own storage is one the shell cannot open - and the
+     * installer checks a package by walking its archive before installing it, so the app's own
+     * cache comes back as "an archive that could not be read" rather than as an install. The copy
+     * is removed once the install is over, whoever it ends.
      */
     fun installApk(repo: ModuleRepo, url: String) {
         installing = repo.fullName
 
         scope.launch {
-            val outcome = runCatching {
-                val file = ModuleCatalog.downloadTo(
-                    url,
-                    File(context.cacheDir, url.substringAfterLast('/').ifBlank { "${repo.name}.apk" })
-                )
+            val name = url.substringAfterLast('/').ifBlank { "${repo.name}.apk" }
+            var staged: String? = null
 
-                AppInstall.install(file.absolutePath, AppInstall.Options())
+            val outcome = runCatching {
+                val path = ModuleCatalog.stream(url) { body -> AppInstall.stage(body, name) }
+                    ?: throw ModuleCatalogException(context.getString(R.string.catalog_install_failed))
+
+                staged = path
+                AppInstall.install(path, AppInstall.Options())
             }.getOrElse {
                 AppInstall.Outcome.Failed(it.message ?: context.getString(R.string.catalog_install_failed))
             }
+
+            staged?.let { path -> runCatching { PrivilegedFiles.delete(path) } }
 
             // What the install said, in its own words: a package the platform refused says why,
             // and that is the whole of what the person needs to know.

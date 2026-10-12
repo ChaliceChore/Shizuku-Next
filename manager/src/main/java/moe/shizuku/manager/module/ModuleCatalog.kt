@@ -1,6 +1,6 @@
 package moe.shizuku.manager.module
 
-import java.io.File
+import java.io.InputStream
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -153,12 +153,14 @@ object ModuleCatalog {
         }
 
     /**
-     * Writes [url] to [file], a piece at a time rather than holding it.
+     * Hands the body of [url] to [consume] as it arrives, and answers what [consume] answered.
      *
-     * [download] is for a module, which is a few hundred kilobytes and can be held whole; an app's
-     * release is tens of megabytes, so it goes through to the file as it arrives.
+     * [download] returns a module whole, which is a few hundred kilobytes and fine; an app's release
+     * is tens of megabytes, and where it has to end up is not a file this app can open - a package
+     * being installed is read by the shell, so it belongs in the shell's own directory. Streaming it
+     * there through [consume] is what keeps a copy of it from existing at all.
      */
-    suspend fun downloadTo(url: String, file: File): File =
+    suspend fun <T> stream(url: String, consume: suspend (InputStream) -> T): T =
         withContext(Dispatchers.IO) {
             val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
 
@@ -166,10 +168,8 @@ object ModuleCatalog {
                 if (!response.isSuccessful) throw ModuleCatalogException(httpMessage(response.code))
 
                 val body = response.body ?: throw ModuleCatalogException("The download came back empty.")
-                file.outputStream().use { out -> body.byteStream().copyTo(out) }
+                body.byteStream().use { stream -> consume(stream) }
             }
-
-            file
         }
 
     /** The bytes of an asset. A module is a few hundred kilobytes at most, so it is held whole. */

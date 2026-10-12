@@ -1,6 +1,8 @@
 package moe.shizuku.manager.install
 
 import android.os.Build
+import android.os.ParcelFileDescriptor
+import java.io.InputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.shizuku.manager.files.FileOperations
@@ -304,6 +306,27 @@ object AppInstall {
             add("--referrer")
             add(it)
         }
+    }
+
+    /**
+     * Puts [source] where the shell can read it, and answers that path.
+     *
+     * A package this app holds - a download, or a file somebody picked - is in a directory the
+     * shell cannot open, and `pm` is run by the shell: the package has to reach the one place both
+     * of them can, which is the shell's own directory under [ShellWorkspace]. The write goes
+     * through [PrivilegedFiles], so the file arrives with the shell's own permissions rather than
+     * this app's, and it is the caller's to remove afterwards.
+     */
+    suspend fun stage(source: InputStream, name: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val target = "$ShellWorkspace/${name.ifBlank { "package.apk" }}"
+
+            ParcelFileDescriptor.AutoCloseOutputStream(PrivilegedFiles.openWrite(target)).use { sink ->
+                source.copyTo(sink)
+            }
+
+            target
+        }.getOrNull()
     }
 
     /**
