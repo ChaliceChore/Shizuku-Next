@@ -2,6 +2,11 @@ package moe.shizuku.manager.ui.screen
 
 import android.graphics.BitmapFactory
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -10,6 +15,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -20,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Wysiwyg
@@ -29,6 +38,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -40,6 +50,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -54,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -289,14 +301,14 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
             title = { Text(stringResource(R.string.modules_install_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ModuleButton(
+                    ModuleDialogButton(
                         icon = Icons.Outlined.FileOpen,
                         label = stringResource(R.string.modules_install_from_file)
                     ) {
                         installDialog = false
                         picker.launch(arrayOf("*/*"))
                     }
-                    ModuleButton(
+                    ModuleDialogButton(
                         icon = Icons.Filled.Cloud,
                         label = stringResource(R.string.modules_find_modules)
                     ) {
@@ -561,31 +573,69 @@ private fun ModuleCard(
                     )
                 }
 
-                if (expanded) {
-                    module.prop.description?.takeIf { it.isNotEmpty() }?.let { description ->
-                        Text(
-                            text = description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 12.dp)
+                // Their chip row: what a module is, at a glance, always there rather than
+                // folded away - the size, and a chip for each thing it can do.
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    ModuleChip(text = formatSize(module.sizeBytes))
+
+                    if (!module.enabled) {
+                        ModuleChip(
+                            text = stringResource(R.string.modules_disabled),
+                            container = MaterialTheme.colorScheme.errorContainer,
+                            content = MaterialTheme.colorScheme.onErrorContainer
                         )
                     }
+                    if (module.hasWebUi) {
+                        ModuleChip(text = stringResource(R.string.modules_web_ui_short))
+                    }
+                    if (module.hasAction) {
+                        ModuleChip(text = stringResource(R.string.modules_action_short))
+                    }
+                    if (module.hasService) {
+                        ModuleChip(
+                            text = stringResource(
+                                if (serviceRunning) {
+                                    R.string.modules_service_running_short
+                                } else {
+                                    R.string.modules_service_short
+                                }
+                            )
+                        )
+                    }
+                }
 
-                    Column(
+                Spacer(modifier = Modifier.height(2.dp))
+
+                // Their action row, to the letter: compact tonal buttons in one line, their icons
+                // at 20dp and their words only when there is no second button to make room for.
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = fadeIn() + expandVertically(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 16.dp, bottom = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                            .padding(top = 10.dp, bottom = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (module.hasAction) {
-                            ModuleButton(
-                                icon = Icons.Outlined.PlayArrow,
-                                label = stringResource(R.string.modules_action_run),
+                            ModuleCompactButton(
+                                icon = Icons.Outlined.Terminal,
+                                label = stringResource(R.string.modules_action_short),
+                                showLabel = !module.hasWebUi,
                                 onClick = onRunAction
                             )
+                            Spacer(modifier = Modifier.weight(0.1f, true))
                         }
 
                         if (module.hasService) {
-                            ModuleButton(
+                            ModuleCompactButton(
                                 icon = Icons.Outlined.Stop,
                                 label = stringResource(
                                     if (serviceRunning) {
@@ -594,21 +644,28 @@ private fun ModuleCard(
                                         R.string.modules_service_start
                                     }
                                 ),
+                                showLabel = !module.hasAction && !module.hasWebUi,
                                 onClick = onToggleService
                             )
+                            Spacer(modifier = Modifier.weight(0.1f, true))
                         }
 
                         if (module.hasWebUi) {
-                            ModuleButton(
+                            ModuleCompactButton(
                                 icon = Icons.AutoMirrored.Outlined.Wysiwyg,
-                                label = stringResource(R.string.modules_web_ui),
+                                label = stringResource(R.string.modules_web_ui_short),
+                                showLabel = !module.hasAction && !module.hasService,
                                 onClick = onOpenWebUi
                             )
+                            Spacer(modifier = Modifier.weight(0.1f, true))
                         }
 
-                        ModuleButton(
+                        Spacer(modifier = Modifier.weight(1f, true))
+
+                        ModuleCompactButton(
                             icon = Icons.Outlined.Delete,
                             label = stringResource(R.string.modules_delete),
+                            showLabel = !module.hasAction && !module.hasService && !module.hasWebUi,
                             onClick = onDelete
                         )
                     }
@@ -618,9 +675,39 @@ private fun ModuleCard(
     }
 }
 
-/** One of a card's actions: their shape, an icon and a word. */
+/**
+ * One of a card's actions, the size and shape theirs are: a 52 by 32 tonal button with a 20dp
+ * icon, whose word appears only when it is the only button on the row.
+ */
 @Composable
-private fun ModuleButton(
+private fun ModuleCompactButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    showLabel: Boolean,
+    onClick: () -> Unit,
+) {
+    FilledTonalButton(
+        modifier = Modifier.defaultMinSize(52.dp, 32.dp),
+        onClick = onClick,
+        contentPadding = ButtonDefaults.TextButtonContentPadding
+    ) {
+        Icon(modifier = Modifier.size(20.dp), imageVector = icon, contentDescription = label)
+        if (showLabel) {
+            Text(
+                modifier = Modifier.padding(start = 7.dp),
+                text = label,
+                style = MaterialTheme.typography.labelMedium
+            )
+        }
+    }
+}
+
+/**
+ * One of a dialog's actions, which are full width there the way theirs are: an icon and a word,
+ * stacked down the dialog rather than laid along a row.
+ */
+@Composable
+private fun ModuleDialogButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     onClick: () -> Unit,
@@ -634,9 +721,44 @@ private fun ModuleButton(
         Text(
             modifier = Modifier.padding(start = 8.dp),
             text = label,
-            style = MaterialTheme.typography.labelLarge
+            style = MaterialTheme.typography.labelMedium
         )
     }
+}
+
+/**
+ * Their label: a small rounded chip carrying one fact about the module.
+ *
+ * The chip is the whole reason their cards read at a glance - the size and what a module can do
+ * are pills under its name, needing no room and no glance into the card's own expansion.
+ */
+@Composable
+private fun ModuleChip(
+    text: String,
+    container: Color = MaterialTheme.colorScheme.secondaryContainer,
+    content: Color = MaterialTheme.colorScheme.onSecondaryContainer,
+) {
+    Surface(
+        color = container,
+        contentColor = content,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+
+/** A size the way their card writes one. */
+private fun formatSize(size: Long): String {
+    if (size <= 0) return "0 B"
+
+    val kb = size / 1024.0
+    if (kb < 1024.0) return "${(kb * 10).toLong() / 10.0} KB"
+
+    return "${(kb / 1024.0 * 10).toLong() / 10.0} MB"
 }
 
 /** Why a zip was refused, said in the terms the user can act on. */

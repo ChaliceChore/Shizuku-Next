@@ -431,6 +431,11 @@
     <string name="modules_card_version">Version: %1$s</string>
     <string name="modules_card_author">Author: %1$s</string>
     <string name="modules_card_id">ID: %1$s</string>
+    <string name="modules_disabled">Disabled</string>
+    <string name="modules_web_ui_short">WebUI</string>
+    <string name="modules_action_short">Action</string>
+    <string name="modules_service_short">Service</string>
+    <string name="modules_service_running_short">Running</string>
     <string name="modules_summary">Add features to Shizuku with modules from the community</string>
     <string name="modules_warning">A module is somebody else\'s shell script, and it runs through Shizuku with the same access Shizuku has. Install only what you trust, and read the commands it asks to run.</string>
     <string name="modules_none">No modules installed yet.</string>
