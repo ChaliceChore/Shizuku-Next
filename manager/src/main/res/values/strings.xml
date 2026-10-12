@@ -451,6 +451,11 @@
     <string name="modules_card_id">ID: %1$s</string>
     <string name="modules_disabled">Disabled</string>
     <string name="modules_error_set_enabled">The module could not be switched on or off: its directory is not writable.</string>
+    <string name="modules_trust">Trust</string>
+    <string name="modules_untrust">Untrust</string>
+    <string name="modules_full_trust">Full Trust</string>
+    <string name="modules_trust_confirm">Trust %1$s?</string>
+    <string name="modules_trust_confirm_message">Its commands run without being shown to you first, whether they come from its action, its service or its WebUI. Everything else stays as it is: the module is still switched off with its switch, and its output is still capped and still stops on the clock. Only trust a module you have read and understand.</string>
     <string name="module_update_available">Update available</string>
     <string name="modules_update">Update</string>
     <string name="modules_sort">Sort</string>

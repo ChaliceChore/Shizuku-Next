@@ -10,9 +10,11 @@ import androidx.compose.animation.shrinkVertically
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +48,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.VerifiedUser
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -151,6 +154,12 @@ fun ModulesScreen(
     var fullAccess by remember { mutableStateOf(ModuleSettings.getAccessMode() == ModuleAccessMode.FULL) }
     var backgroundAllowed by remember { mutableStateOf(ModuleSettings.allowsBackground()) }
     var expanded by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    // Which cards have had their Trust action long-pressed into view, which is their own way of
+    // asking: a long press shows it, another hides it, and a module that is trusted says so on the
+    // card with a Full Trust chip.
+    var trustRevealed by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingTrust by remember { mutableStateOf<AdbModule?>(null) }
 
     var pendingCommand by remember { mutableStateOf<ModuleCommandRequest?>(null) }
     var approval by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
@@ -442,6 +451,8 @@ fun ModulesScreen(
                             // that draws the switch could be reused as it was with the state it
                             // had. A value in the parameters cannot be reused when it differs.
                             enabled = module.enabled,
+                            trusted = ModuleSettings.isTrusted(module.id),
+                            trustRevealed = module.id in trustRevealed,
                             expanded = module.id in expanded,
                             serviceRunning = module.id in running,
                             update = updates[module.id],
@@ -457,6 +468,27 @@ fun ModulesScreen(
                                     errorRes = R.string.modules_error_set_enabled
                                 }
                                 reload()
+                            },
+                            onTrustReveal = {
+                                trustRevealed = if (module.id in trustRevealed) {
+                                    trustRevealed - module.id
+                                } else {
+                                    trustRevealed + module.id
+                                }
+
+                                // The action is on the row the card opens to show, so a long
+                                // press that reveals it opens the card with it.
+                                if (module.id !in expanded) expanded = expanded + module.id
+                            },
+                            onTrustToggle = { trust ->
+                                if (trust) {
+                                    // Trusting is the one action here that silences the review, so
+                                    // it is asked about rather than done on the spot.
+                                    pendingTrust = module
+                                } else {
+                                    ModuleSettings.setTrusted(module.id, false)
+                                    reload()
+                                }
                             },
                             onRunAction = { actionFor = module },
                             onToggleService = {
@@ -657,6 +689,26 @@ fun ModulesScreen(
         )
     }
 
+    pendingTrust?.let { module ->
+        AlertDialog(
+            onDismissRequest = { pendingTrust = null },
+            title = { Text(stringResource(R.string.modules_trust_confirm, module.name)) },
+            text = { Text(stringResource(R.string.modules_trust_confirm_message)) },
+            confirmButton = {
+                PillButton(onClick = {
+                    pendingTrust = null
+                    ModuleSettings.setTrusted(module.id, true)
+                    reload()
+                }) { Text(stringResource(R.string.modules_trust)) }
+            },
+            dismissButton = {
+                PillButtonQuiet(onClick = { pendingTrust = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
+
     pendingDelete?.let { module ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
@@ -700,15 +752,20 @@ fun ModulesScreen(
  * text: a module that has a picture shows it, and one that has none is a plain card. The card opens
  * on a tap and there is no arrow saying so, because that is how theirs opens too.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ModuleCard(
     module: AdbModule,
     enabled: Boolean,
+    trusted: Boolean,
+    trustRevealed: Boolean,
     expanded: Boolean,
     serviceRunning: Boolean,
     update: ModuleUpdate?,
     onExpandToggle: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
+    onTrustReveal: () -> Unit,
+    onTrustToggle: (Boolean) -> Unit,
     onRunAction: () -> Unit,
     onToggleService: () -> Unit,
     onOpenWebUi: () -> Unit,
@@ -729,7 +786,11 @@ private fun ModuleCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
-            .clickable(onClick = onExpandToggle)
+            // Their gesture for the trust action: a long press reveals it, another hides it.
+            .combinedClickable(
+                onClick = onExpandToggle,
+                onLongClick = onTrustReveal
+            )
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             bitmap?.let { image ->
@@ -810,6 +871,10 @@ private fun ModuleCard(
                         content = MaterialTheme.colorScheme.onPrimary
                     )
 
+                    // A trusted module says so on its card, their chip and their word for it.
+                    if (trusted) {
+                        ModuleChip(text = stringResource(R.string.modules_full_trust))
+                    }
                     if (!enabled) {
                         ModuleChip(
                             text = stringResource(R.string.modules_disabled),
@@ -897,6 +962,20 @@ private fun ModuleCard(
                                 label = stringResource(R.string.modules_web_ui_short),
                                 showLabel = !module.hasAction && !module.hasService,
                                 onClick = onOpenWebUi
+                            )
+                            Spacer(modifier = Modifier.weight(0.1f, true))
+                        }
+
+                        // Only while it has been long-pressed into view, and never the other way
+                        // round: this is the one action on the row that a person has to ask for.
+                        if (trustRevealed) {
+                            ModuleCompactButton(
+                                icon = Icons.Outlined.VerifiedUser,
+                                label = stringResource(
+                                    if (trusted) R.string.modules_untrust else R.string.modules_trust
+                                ),
+                                showLabel = true,
+                                onClick = { onTrustToggle(!trusted) }
                             )
                             Spacer(modifier = Modifier.weight(0.1f, true))
                         }
