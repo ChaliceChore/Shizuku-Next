@@ -38,8 +38,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteForever
-import androidx.compose.material.icons.outlined.RemoveCircleOutline
-import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -159,7 +157,6 @@ fun ModulesScreen(
     var resultTitle by remember { mutableStateOf("") }
     var errorRes by remember { mutableStateOf<Int?>(null) }
     var pendingDelete by remember { mutableStateOf<AdbModule?>(null) }
-    var pendingRemove by remember { mutableStateOf<AdbModule?>(null) }
     var running by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     /**
@@ -427,7 +424,6 @@ fun ModulesScreen(
                             module = module,
                             expanded = module.id in expanded,
                             serviceRunning = module.id in running,
-                            removed = module.removed,
                             update = updates[module.id],
                             onExpandToggle = {
                                 expanded = if (module.id in expanded) {
@@ -472,11 +468,6 @@ fun ModulesScreen(
                                     busy = false
                                     reload()
                                 }
-                            },
-                            onRemove = { pendingRemove = module },
-                            onRestore = {
-                                AdbModuleManager.setRemoved(module, false)
-                                reload()
                             },
                             onDelete = { pendingDelete = module }
                         )
@@ -644,26 +635,6 @@ fun ModulesScreen(
         )
     }
 
-    pendingRemove?.let { module ->
-        AlertDialog(
-            onDismissRequest = { pendingRemove = null },
-            title = { Text(stringResource(R.string.modules_remove_confirm, module.name)) },
-            text = { Text(stringResource(R.string.modules_remove_confirm_message)) },
-            confirmButton = {
-                PillButton(onClick = {
-                    pendingRemove = null
-                    AdbModuleManager.setRemoved(module, true)
-                    reload()
-                }) { Text(stringResource(R.string.modules_remove)) }
-            },
-            dismissButton = {
-                PillButtonQuiet(onClick = { pendingRemove = null }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
-        )
-    }
-
     pendingDelete?.let { module ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
@@ -712,7 +683,6 @@ private fun ModuleCard(
     module: AdbModule,
     expanded: Boolean,
     serviceRunning: Boolean,
-    removed: Boolean,
     update: ModuleUpdate?,
     onExpandToggle: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
@@ -720,8 +690,6 @@ private fun ModuleCard(
     onToggleService: () -> Unit,
     onOpenWebUi: () -> Unit,
     onUpdate: (ModuleUpdate) -> Unit,
-    onRemove: () -> Unit,
-    onRestore: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var bitmap by remember(module.banner) { mutableStateOf<ImageBitmap?>(null) }
@@ -811,15 +779,7 @@ private fun ModuleCard(
                 ) {
                     ModuleChip(text = formatSize(module.sizeBytes))
 
-                    // Their chip for a module on its way out, in their colour.
-                    if (removed) {
-                        ModuleChip(
-                            text = stringResource(R.string.modules_uninstalled),
-                            container = MaterialTheme.colorScheme.errorContainer,
-                            content = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                    if (!module.enabled && !removed) {
+                    if (!module.enabled) {
                         ModuleChip(
                             text = stringResource(R.string.modules_disabled),
                             container = MaterialTheme.colorScheme.errorContainer,
@@ -924,26 +884,8 @@ private fun ModuleCard(
                             Spacer(modifier = Modifier.weight(0.1f, true))
                         }
 
-                        // Their destructive pair: Remove marks a module and can be taken back,
-                        // Restore takes the mark off, and Delete is the one that ends it.
-                        if (removed) {
-                            ModuleCompactButton(
-                                icon = Icons.Outlined.Restore,
-                                label = stringResource(R.string.modules_restore),
-                                showLabel = true,
-                                onClick = onRestore
-                            )
-                            Spacer(modifier = Modifier.weight(0.1f, true))
-                        } else {
-                            ModuleCompactButton(
-                                icon = Icons.Outlined.RemoveCircleOutline,
-                                label = stringResource(R.string.modules_remove),
-                                showLabel = false,
-                                onClick = onRemove
-                            )
-                            Spacer(modifier = Modifier.weight(0.1f, true))
-                        }
-
+                        // Delete is the only destructive thing a card offers: a module is
+                        // switched off with the switch above, and Delete is what ends it.
                         ModuleCompactButton(
                             icon = Icons.Outlined.DeleteForever,
                             label = stringResource(R.string.modules_delete),
