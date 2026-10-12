@@ -129,8 +129,11 @@ The debug task builds a debuggable server. In Android Studio, enable **Always in
 
 - [RikkaW / RikkaApps](https://github.com/RikkaApps/Shizuku) - original Shizuku, server, and API.
 - [thedjchi](https://github.com/thedjchi/Shizuku) - upstream fork and many inherited features.
-- [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) - inspiration and components for module management and UI.
-- [MMRL](https://github.com/MMRLApp/MMRL) - module-format implementation reference.
+- [kerneldroid](https://github.com/kerneldroid) - [Nightzuku](https://github.com/kerneldroid/Nightzuku), where the ADB modules feature comes from: the module format itself, actions and services, and the `window.Shizuku` WebUI bridge.
+- [Shevery](https://github.com/HmnDev-Tech/shevery) - the published module API and guide this app's module support is written against, and the module catalogue it searches.
+- [Xhizuku](https://github.com/xeonleonreal/Xhizuku) - the other implementation of that format, whose documentation this one is checked against.
+- [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) - the card, chip and tab layout the modules list and the Material 3 interface follow.
+- [MMRL](https://github.com/MMRLApp/MMRL) - the label component whose default accent colour the module cards' size chip follows.
 - All upstream contributors and Crowdin translators.
 
 ## License

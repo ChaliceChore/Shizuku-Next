@@ -8,6 +8,12 @@ This app implements that format rather than one of its own. If you have written 
 or Xhizuku, it installs and runs here unchanged. The last section lists the few places where this
 implementation answers differently, so nothing is a surprise.
 
+The format is [kerneldroid](https://github.com/kerneldroid)'s
+[Nightzuku](https://github.com/kerneldroid/Nightzuku), which is where the modules, the actions and
+services and the `window.Shizuku` bridge come from;
+[Shevery](https://github.com/HmnDev-Tech/shevery) publishes the guide and API reference this one is
+written against, and [Xhizuku](https://github.com/xeonleonreal/Xhizuku) implements the same format.
+
 ## The package
 
 A module is a zip with `module.prop` at its root. Everything else is optional:
