@@ -20,6 +20,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +82,12 @@ fun ModuleActionScreen(module: AdbModule, onBack: () -> Unit) {
             running = false
         }
     }
+
+    // The screen opens with the run already asked for: the run button was the whole point of it,
+    // and a console that sat blank waiting for a second tap was a screen with nothing on it. It is
+    // the same path the button takes - a trusted module runs at once, and one that is not trusted
+    // gets the command review first.
+    LaunchedEffect(Unit) { run() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
