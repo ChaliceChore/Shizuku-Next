@@ -23,6 +23,10 @@ class ModuleOutputTest {
     ) : InputStream() {
         private var at = 0
 
+        /** How many bytes were taken, so a test can tell a drained stream from an abandoned one. */
+        var handed = 0
+            private set
+
         override fun read(): Int = if (at < bytes.size) bytes[at++].toInt() and 0xFF else -1
 
         override fun read(b: ByteArray, off: Int, len: Int): Int {
@@ -31,6 +35,7 @@ class ModuleOutputTest {
             val count = minOf(perRead, len, bytes.size - at)
             bytes.copyInto(b, off, at, at + count)
             at += count
+            handed += count
             return count
         }
     }
@@ -97,6 +102,21 @@ class ModuleOutputTest {
 
         assertEquals(ModuleRunLimits.MAX_OUTPUT_BYTES, kept.length)
         assertEquals(kept, reported)
+    }
+
+    @Test
+    fun `a stream longer than the cap is drained rather than left blocked`() {
+        // Twice the cap, handed over a piece at a time. A reader that stopped reading at the cap
+        // would leave the rest in the pipe, and a process writing into a pipe nobody reads blocks
+        // as soon as the pipe fills: it would hang until the clock stopped it.
+        val bytes = ByteArray(ModuleRunLimits.MAX_OUTPUT_BYTES * 2) { 'a'.code.toByte() }
+        val stream = DripStream(bytes, perRead = 4096)
+        val kept = StringBuilder()
+
+        AdbModuleManager.readCapped(stream, kept)
+
+        assertEquals(ModuleRunLimits.MAX_OUTPUT_BYTES, kept.length)
+        assertEquals(bytes.size, stream.handed)
     }
 
     @Test

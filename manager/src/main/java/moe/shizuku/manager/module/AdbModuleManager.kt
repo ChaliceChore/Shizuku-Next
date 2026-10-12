@@ -375,6 +375,12 @@ object AdbModuleManager {
      * that is the unit the format gives it. What is reported is exactly what is kept, so a console
      * and the log cannot come to hold different things.
      *
+     * Past the cap the stream is still read, and thrown away. That is not tidiness: a process
+     * writing into a pipe nobody reads from blocks the moment the pipe fills, so a script that
+     * printed more than the cap would sit there until the clock stopped it instead of finishing -
+     * which is a script written for another implementation of this format, where the streams are
+     * drained, breaking here. The first [ModuleRunLimits.MAX_OUTPUT_BYTES] are what is kept.
+     *
      * The bytes are decoded through a [Charsets.UTF_8] decoder instead of `String(bytes, UTF_8)`,
      * and that is the whole reason for the shape of this: one read can end in the middle of a
      * character, and decoding each read on its own would turn both halves into replacement
@@ -396,13 +402,18 @@ object AdbModuleManager {
                 .onUnmappableCharacter(CodingErrorAction.REPLACE)
 
             var total = 0
+            val drained = ByteArray(READ_BUFFER_BYTES)
 
-            while (total < ModuleRunLimits.MAX_OUTPUT_BYTES) {
-                // Only what is left of the cap is read, so the cap is the cap: a read never goes
-                // past it, and no byte that arrived is thrown away.
+            while (true) {
+                // At the cap the bytes are read and dropped, so the process never blocks on a full
+                // pipe. Under it, only what is left of the cap is read: the cap is the cap, and no
+                // byte that is kept is read past it.
+                if (total >= ModuleRunLimits.MAX_OUTPUT_BYTES) {
+                    if (stream.read(drained) <= 0) break
+                    continue
+                }
+
                 val room = minOf(bytes.remaining(), ModuleRunLimits.MAX_OUTPUT_BYTES - total)
-                if (room <= 0) break
-
                 val read = stream.read(bytes.array(), bytes.position(), room)
                 if (read <= 0) break
 
