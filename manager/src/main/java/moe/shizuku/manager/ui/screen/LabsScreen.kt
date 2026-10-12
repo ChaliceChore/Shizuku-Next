@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -107,8 +108,13 @@ private val ActiveDotSize = 10.dp
 private val ActiveGreen = Color(0xFF34C759)
 
 /**
- * The room reserved for the name: two lines, which is what every name in the list needs at three
- * across.
+ * The lines of the name a tile reserves room for.
+ *
+ * Three, which is what the longest name in the list needs at three across once the phone's type is
+ * set larger than the default. It was two, written down as 40dp - and 40dp is two lines of the
+ * *default* type, so on a phone set to larger type that box held one line and the name was clipped
+ * and ellipsized instead of continuing onto the next line. The room is measured from the type the
+ * name is set in now, so the two cannot come apart again.
  *
  * Reserved, not imposed. The tile is always this much taller than its plate, so every tile in the
  * grid is the same height - but the label inside is only as tall as its own text and the whole
@@ -116,10 +122,10 @@ private val ActiveGreen = Color(0xFF34C759)
  * attempt and it was wrong in a way that showed: a one-line name centred its text inside two
  * lines' worth of box, which pushed the block up and left the slack at the bottom of the tile.
  *
- * A name that outgrows the two lines is a name to shorten: it ellipsizes, which is visible,
- * where letting it run on would move the plate.
+ * A name longer than that is still a name to shorten: it ellipsizes, which is visible, where
+ * letting it run on would move the plate.
  */
-private val LabelHeight = 40.dp
+private const val LabelLines = 3
 
 /**
  * The things that are gone to rather than lived in.
@@ -335,12 +341,19 @@ private fun LabTile(
         // on whichever of the two was wider.
         val plate = (maxWidth - TilePadding * 2) * PlateFraction
 
+        // The name's room in this device's own terms: a line of the type the name is set in, times
+        // the lines it may take. A measurement rather than a number of dp, because the font scale
+        // is part of the answer and it was not part of the 40dp this used to be.
+        val labelHeight = with(LocalDensity.current) {
+            MaterialTheme.typography.labelLarge.lineHeight.toDp() * LabelLines
+        }
+
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 // The sum of the parts, so every tile in the grid is the same height whatever its
                 // name runs to - a grid whose rows differ in height does not read as a grid.
-                .height(TilePadding * 2 + plate + PlateGap + LabelHeight)
+                .height(TilePadding * 2 + plate + PlateGap + labelHeight)
                 .clickable(onClick = onClick)
                 .then(
                     if (LocalAmoledTheme.current) {
@@ -407,7 +420,7 @@ private fun LabTile(
                     // text does not take is a word that does not have to be broken.
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
+                    maxLines = LabelLines,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center
                 )
