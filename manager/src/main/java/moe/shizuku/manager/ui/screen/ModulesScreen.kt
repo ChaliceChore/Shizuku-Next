@@ -791,7 +791,15 @@ private fun ModuleCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    ModuleChip(text = formatSize(module.sizeBytes))
+                    // Their size pill is the one label drawn in the app's own accent colour - a
+                    // filled primary chip, from the library's own default - where the rest of the
+                    // row is the muted container. It is the one fact about the module itself
+                    // rather than about something it can do, and it reads as the bright one.
+                    ModuleChip(
+                        text = formatSize(module.sizeBytes),
+                        container = MaterialTheme.colorScheme.primary,
+                        content = MaterialTheme.colorScheme.onPrimary
+                    )
 
                     if (!module.enabled) {
                         ModuleChip(
