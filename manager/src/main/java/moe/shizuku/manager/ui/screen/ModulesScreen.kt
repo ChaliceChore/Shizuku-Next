@@ -22,19 +22,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Wysiwyg
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material.icons.automirrored.outlined.Wysiwyg
+import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Stop
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,7 +63,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.R
@@ -81,15 +80,16 @@ import moe.shizuku.manager.ui.component.PillButtonQuiet
 /**
  * The modules this app has installed.
  *
- * The cards are KernelSU-Next's: a module's own banner faintly behind it, its name in semibold with
- * its version under it, the whole card opening to show what can be done with it, and the actions as
- * tonal buttons with their icons. That shape is worth copying because a module is a thing with a
- * picture and a paragraph and one or two buttons, which is exactly what it draws well - and this
- * app has no wish to invent a second way of showing one.
+ * The cards are KernelSU-Next's, deliberately and in detail: a module's own banner faintly behind
+ * it and faded into the surface, its name in semibold with its version and author under it, the
+ * whole card opening on a tap to show its id, its description and its actions as tonal buttons with
+ * icons, and a floating button for installing another one. A module is a picture and a paragraph
+ * and a button, which is what that shape draws well, so there was no reason to invent a second way
+ * of showing one.
  *
- * Where it parts company is the two switches at the top: KernelSU runs everything as root and has
- * nothing to ask, while here a module's scripts run as shell through Shizuku and what a module may
- * do is the user's decision. Nothing runs that has not been shown first either.
+ * What stays this fork's own is the tuning icon in the bar: a module's scripts run as shell through
+ * Shizuku rather than as root, so what a module may do is a decision somebody has to make, and no
+ * command runs that has not been shown first.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,6 +101,8 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     var busy by remember { mutableStateOf(false) }
     var webUiFor by remember { mutableStateOf<AdbModule?>(null) }
     var catalogOpen by remember { mutableStateOf(false) }
+    var installDialog by remember { mutableStateOf(false) }
+    var tuneDialog by remember { mutableStateOf(false) }
 
     var fullAccess by remember { mutableStateOf(ModuleSettings.getAccessMode() == ModuleAccessMode.FULL) }
     var backgroundAllowed by remember { mutableStateOf(ModuleSettings.allowsBackground()) }
@@ -145,7 +147,8 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     }
 
     if (catalogOpen) {
-        ModulesCatalogScreen(
+        CatalogScreen(
+            kind = CatalogKind.MODULES,
             installedIds = modules.map { it.id }.toSet(),
             onBack = { catalogOpen = false },
             onInstalled = {
@@ -179,165 +182,205 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(stringResource(R.string.tools_modules)) },
-            windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
-            actions = {
-                IconButton(onClick = { picker.launch(arrayOf("*/*")) }) {
-                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.modules_install))
-                }
-                IconButton(onClick = { catalogOpen = true }) {
-                    Icon(Icons.Filled.Cloud, contentDescription = stringResource(R.string.modules_catalog))
-                }
-            }
-        )
-
-        if (busy) {
-            LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
-        }
-
-        LazyColumn(
-            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = bottomPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.large)
-                ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Text(
-                            text = stringResource(R.string.modules_warning),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = { Text(stringResource(R.string.tools_modules)) },
+                windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
+                actions = {
+                    IconButton(onClick = { tuneDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Tune,
+                            contentDescription = stringResource(R.string.modules_settings)
                         )
+                    }
+                }
+            )
 
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.modules_access_full),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = stringResource(R.string.modules_access_full_summary),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            Switch(
-                                checked = fullAccess,
-                                onCheckedChange = { checked ->
-                                    fullAccess = checked
-                                    ModuleSettings.setAccessMode(
-                                        if (checked) ModuleAccessMode.FULL else ModuleAccessMode.SAFE
-                                    )
-                                    // Background actions need Full access, so turning it off turns
-                                    // them off with it rather than leaving a switch on that does
-                                    // nothing.
-                                    if (!checked && backgroundAllowed) {
-                                        backgroundAllowed = false
-                                        ModuleSettings.setAllowsBackground(false)
+            if (busy) {
+                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            LazyColumn(
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    top = 16.dp,
+                    end = 16.dp,
+                    bottom = bottomPadding + 88.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (modules.isEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.modules_none),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                modules.forEach { module ->
+                    item {
+                        ModuleCard(
+                            module = module,
+                            expanded = module.id in expanded,
+                            serviceRunning = module.id in running,
+                            onExpandToggle = {
+                                expanded = if (module.id in expanded) {
+                                    expanded - module.id
+                                } else {
+                                    expanded + module.id
+                                }
+                            },
+                            onEnabledChange = { checked ->
+                                AdbModuleManager.setEnabled(module, checked)
+                                reload()
+                            },
+                            onRunAction = {
+                                scope.launch {
+                                    busy = true
+                                    val action = AdbModuleManager.runAction(module, approve)
+                                    busy = false
+                                    resultTitle = module.name
+                                    result = action
+                                    reload()
+                                }
+                            },
+                            onToggleService = {
+                                if (module.id in running) {
+                                    AdbModuleManager.stopService(module)
+                                    running = running - module.id
+                                } else {
+                                    scope.launch {
+                                        busy = true
+                                        val started = AdbModuleManager.startService(module, approve)
+                                        busy = false
+                                        if (started.exitCode == 0) {
+                                            running = running + module.id
+                                        } else {
+                                            resultTitle = module.name
+                                            result = started
+                                        }
                                     }
                                 }
-                            )
-                        }
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = stringResource(R.string.modules_allow_background),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Text(
-                                    text = stringResource(R.string.modules_allow_background_summary),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                            Switch(
-                                checked = backgroundAllowed,
-                                enabled = fullAccess,
-                                onCheckedChange = { checked ->
-                                    backgroundAllowed = checked
-                                    ModuleSettings.setAllowsBackground(checked)
-                                }
-                            )
-                        }
+                            },
+                            onOpenWebUi = { webUiFor = module },
+                            onDelete = { pendingDelete = module }
+                        )
                     }
                 }
             }
+        }
 
-            if (modules.isEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.modules_none),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        ExtendedFloatingActionButton(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
+            onClick = { installDialog = true },
+            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
+            text = { Text(stringResource(R.string.modules_install)) }
+        )
+    }
+
+    if (installDialog) {
+        AlertDialog(
+            onDismissRequest = { installDialog = false },
+            title = { Text(stringResource(R.string.modules_install_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ModuleButton(
+                        icon = Icons.Outlined.FileOpen,
+                        label = stringResource(R.string.modules_install_from_file)
+                    ) {
+                        installDialog = false
+                        picker.launch(arrayOf("*/*"))
+                    }
+                    ModuleButton(
+                        icon = Icons.Filled.Cloud,
+                        label = stringResource(R.string.modules_find_modules)
+                    ) {
+                        installDialog = false
+                        catalogOpen = true
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                PillButtonQuiet(onClick = { installDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
                 }
             }
+        )
+    }
 
-            modules.forEach { module ->
-                item {
-                    ModuleCard(
-                        module = module,
-                        expanded = module.id in expanded,
-                        serviceRunning = module.id in running,
-                        onExpandToggle = {
-                            expanded = if (module.id in expanded) {
-                                expanded - module.id
-                            } else {
-                                expanded + module.id
-                            }
-                        },
-                        onEnabledChange = { checked ->
-                            AdbModuleManager.setEnabled(module, checked)
-                            reload()
-                        },
-                        onRunAction = {
-                            scope.launch {
-                                busy = true
-                                val action = AdbModuleManager.runAction(module, approve)
-                                busy = false
-                                resultTitle = module.name
-                                result = action
-                                reload()
-                            }
-                        },
-                        onToggleService = {
-                            if (module.id in running) {
-                                AdbModuleManager.stopService(module)
-                                running = running - module.id
-                            } else {
-                                scope.launch {
-                                    busy = true
-                                    val started = AdbModuleManager.startService(module, approve)
-                                    busy = false
-                                    if (started.exitCode == 0) {
-                                        running = running + module.id
-                                    } else {
-                                        resultTitle = module.name
-                                        result = started
-                                    }
+    if (tuneDialog) {
+        AlertDialog(
+            onDismissRequest = { tuneDialog = false },
+            title = { Text(stringResource(R.string.modules_settings)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.modules_access_full),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = stringResource(R.string.modules_access_full_summary_short),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = fullAccess,
+                            onCheckedChange = { checked ->
+                                fullAccess = checked
+                                ModuleSettings.setAccessMode(
+                                    if (checked) ModuleAccessMode.FULL else ModuleAccessMode.SAFE
+                                )
+                                if (!checked && backgroundAllowed) {
+                                    backgroundAllowed = false
+                                    ModuleSettings.setAllowsBackground(false)
                                 }
                             }
-                        },
-                        onOpenWebUi = { webUiFor = module },
-                        onDelete = { pendingDelete = module }
-                    )
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.modules_allow_background),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = stringResource(R.string.modules_allow_background_summary_short),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        Switch(
+                            checked = backgroundAllowed,
+                            enabled = fullAccess,
+                            onCheckedChange = { checked ->
+                                backgroundAllowed = checked
+                                ModuleSettings.setAllowsBackground(checked)
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                PillButtonQuiet(onClick = { tuneDialog = false }) {
+                    Text(stringResource(android.R.string.ok))
                 }
             }
-        }
+        )
     }
 
     pendingCommand?.let { request ->
@@ -425,7 +468,8 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
  *
  * The banner is behind the card's content at 18 percent and faded into the surface towards the
  * bottom, which is the detail that makes this look like their screen rather than like a list of
- * text: a module that has a picture shows it, and one that has none is a plain card.
+ * text: a module that has a picture shows it, and one that has none is a plain card. The card opens
+ * on a tap and there is no arrow saying so, because that is how theirs opens too.
  */
 @Composable
 private fun ModuleCard(
@@ -480,7 +524,7 @@ private fun ModuleCard(
                 )
             }
 
-            Column(modifier = Modifier.padding(18.dp)) {
+            Column(modifier = Modifier.padding(22.dp, 18.dp, 22.dp, 12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -493,49 +537,43 @@ private fun ModuleCard(
                         )
                         Text(
                             text = stringResource(
-                                R.string.modules_card_line,
-                                module.prop.version ?: "-",
+                                R.string.modules_card_version,
+                                module.prop.version ?: "-"
+                            ),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.modules_card_author,
                                 module.prop.author ?: "-"
                             ),
                             style = MaterialTheme.typography.bodySmall
                         )
+                        Text(
+                            text = stringResource(R.string.modules_card_id, module.id),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
-
-                    Icon(
-                        imageVector = if (expanded) {
-                            Icons.Filled.KeyboardArrowUp
-                        } else {
-                            Icons.Filled.KeyboardArrowDown
-                        },
-                        contentDescription = null
-                    )
 
                     Switch(
                         checked = module.enabled,
-                        onCheckedChange = onEnabledChange,
-                        modifier = Modifier.padding(start = 4.dp)
+                        onCheckedChange = onEnabledChange
                     )
                 }
 
                 if (expanded) {
-                    Text(
-                        text = module.prop.id,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 10.dp)
-                    )
-
                     module.prop.description?.takeIf { it.isNotEmpty() }?.let { description ->
                         Text(
                             text = description,
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(top = 8.dp)
+                            modifier = Modifier.padding(top = 12.dp)
                         )
                     }
 
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 16.dp),
+                            .padding(top = 16.dp, bottom = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         if (module.hasAction) {

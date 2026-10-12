@@ -101,7 +101,8 @@ import moe.shizuku.manager.ui.screen.LabsScreen
 import moe.shizuku.manager.ui.screen.LogScreen
 import moe.shizuku.manager.ui.screen.LabsToggleScreen
 import moe.shizuku.manager.ui.screen.ManageScreen
-import moe.shizuku.manager.ui.screen.MoreAppsScreen
+import moe.shizuku.manager.ui.screen.CatalogKind
+import moe.shizuku.manager.ui.screen.CatalogScreen
 import moe.shizuku.manager.ui.screen.PermissionsScreen
 import moe.shizuku.manager.ui.screen.SettingsScreen
 import moe.shizuku.manager.ui.screen.ShellScreen
@@ -321,7 +322,12 @@ fun ShizukuApp() {
                                 onBack = { detail = null }
                             )
 
-                            Detail.MORE_APPS -> MoreAppsScreen(onBack = { detail = null })
+                            Detail.MORE_APPS -> CatalogScreen(
+                                kind = CatalogKind.APPS,
+                                installedIds = emptySet(),
+                                onBack = { detail = null },
+                                onInstalled = {}
+                            )
 
                             Detail.STEALTH -> StealthScreen(onBack = { detail = null })
                             Detail.TERMINAL -> TerminalScreen(onBack = { detail = null })

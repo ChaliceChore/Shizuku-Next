@@ -17,6 +17,7 @@ data class ModuleRepo(
     val description: String = "",
     @SerialName("stargazers_count") val stars: Int = 0,
     val language: String? = null,
+    @SerialName("updated_at") val updatedAt: String = "",
     val owner: Owner? = null,
 ) {
     @Serializable
@@ -30,6 +31,10 @@ data class ModuleRepo(
 
     val avatarUrl: String? get() = owner?.avatarUrl?.takeIf { it.isNotEmpty() }
 }
+
+/** The shape GitHub's repository search answers in. */
+@Serializable
+private data class RepoSearch(val items: List<ModuleRepo> = emptyList())
 
 /** One file of a release. A module is the one among them that is a zip. */
 @Serializable
@@ -67,6 +72,39 @@ object ModuleCatalog {
     /** The community index: repositories worth looking at, in the shape the index publishes. */
     const val INDEX_URL =
         "https://raw.githubusercontent.com/rushiranpise/shizuku-modules/main/data/repos.json"
+
+    /**
+     * What a module is, as far as anything on the internet can tell: a repository whose owner put
+     * the modules' topic on it.
+     *
+     * This is the whole of the module list's source, and it is the same way the format's own
+     * implementations find modules. A topic search is a claim by the author rather than a proof -
+     * anyone can add a topic - which is why installing still goes through the format's checks, and
+     * why the list says where it came from instead of pretending to know better.
+     */
+    const val MODULE_TOPIC = "shevery-modules"
+
+    /**
+     * The modules written for this format, most starred first.
+     *
+     * The search API is unauthenticated here and rate limited to ten calls a minute, which a person
+     * browsing a list will never reach: a token would raise a limit nobody is close to.
+     */
+    suspend fun modules(topic: String = MODULE_TOPIC): List<ModuleRepo> =
+        withContext(Dispatchers.IO) {
+            val search = json.decodeFromString<RepoSearch>(
+                get("https://api.github.com/search/repositories?q=topic:$topic&sort=stars&per_page=50")
+            )
+
+            search.items
+        }
+
+    /** The newest release of [repoFullName], or null when it has never published one. */
+    suspend fun latestRelease(repoFullName: String): Release? =
+        withContext(Dispatchers.IO) {
+            runCatching { json.decodeFromString<Release>(get("https://api.github.com/repos/$repoFullName/releases/latest")) }
+                .getOrNull()
+        }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
