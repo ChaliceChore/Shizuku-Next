@@ -19,6 +19,12 @@ data class ModuleRepo(
     val language: String? = null,
     @SerialName("updated_at") val updatedAt: String = "",
     val owner: Owner? = null,
+    // The rest is what the directory publishes beyond GitHub's own fields, and it is what its
+    // filters and sort orders are built from: a category, when the app was added, and its topics.
+    val category: String = "",
+    @SerialName("added_at") val addedAt: String = "",
+    val topics: List<String> = emptyList(),
+    val release: RepoRelease? = null,
 ) {
     @Serializable
     data class Owner(
@@ -26,10 +32,20 @@ data class ModuleRepo(
         @SerialName("avatar_url") val avatarUrl: String = "",
     )
 
+    @Serializable
+    data class RepoRelease(
+        val tag: String = "",
+        val name: String = "",
+        @SerialName("published_at") val publishedAt: String = "",
+    )
+
     /** The half of a `owner/name` a list shows, the owner being the less interesting one. */
     val name: String get() = fullName.substringAfter('/')
 
     val avatarUrl: String? get() = owner?.avatarUrl?.takeIf { it.isNotEmpty() }
+
+    /** When the newest release was published, which is what the site sorts "Latest release" by. */
+    val releasedAt: String get() = release?.publishedAt.orEmpty()
 }
 
 /** The shape GitHub's repository search answers in. */

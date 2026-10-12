@@ -24,8 +24,11 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
@@ -51,6 +54,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.R
 import moe.shizuku.manager.module.AdbModuleManager
@@ -70,10 +76,97 @@ enum class CatalogKind {
     APPS,
 }
 
-private enum class CatalogSort(val label: Int) {
-    STARS(R.string.catalog_sort_stars),
-    UPDATED(R.string.catalog_sort_updated),
-    NAME(R.string.catalog_sort_name),
+/** Their order options, in their order, each with the comparison it means. */
+private enum class CatalogSort(val label: Int, val order: Comparator<ModuleRepo>) {
+    UPDATED(R.string.catalog_sort_updated, latestFirst { it.updatedAt }),
+    STARS(R.string.catalog_sort_stars, compareByDescending { it.stars }),
+    NAME(R.string.catalog_sort_name, compareBy { it.name.lowercase() }),
+    RELEASED(R.string.catalog_sort_released, latestFirst { it.releasedAt }),
+    ADDED(R.string.catalog_sort_added, latestFirst { it.addedAt }),
+}
+
+/**
+ * How recently an app must have changed, which is their own "Updated" menu: three windows and any
+ * time at all, the last spelled as a day count of none.
+ */
+private enum class UpdatedWithin(val label: Int, val days: Int) {
+    ANY(R.string.catalog_updated_any, 0),
+    LAST_7(R.string.catalog_updated_last_7, 7),
+    LAST_30(R.string.catalog_updated_last_30, 30),
+    LAST_90(R.string.catalog_updated_last_90, 90),
+}
+
+/** Newest first, with an app that has no such date at all last rather than first. */
+private fun latestFirst(date: (ModuleRepo) -> String): Comparator<ModuleRepo> =
+    compareBy<ModuleRepo> { date(it).isEmpty() }.thenByDescending { date(it) }
+
+/**
+ * Whether a stamp from the directory is within the last [days] days, where none means any time.
+ *
+ * The stamp is parsed by hand: the app runs on Android 7, where java.time is not available without
+ * desugaring, and SimpleDateFormat is what the rest of this app reads dates with anyway.
+ */
+private fun withinDays(timestamp: String, days: Int, now: Long): Boolean {
+    if (days <= 0) return true
+
+    val at = isoMillis(timestamp) ?: return false
+
+    return now - at <= days * 24L * 60L * 60L * 1000L
+}
+
+/** An ISO 8601 UTC stamp in milliseconds, or null when it is empty or not one. */
+private fun isoMillis(timestamp: String): Long? {
+    if (timestamp.isBlank()) return null
+
+    // GitHub's stamps carry whole seconds and the directory's added_at carries milliseconds, so
+    // the fraction is trimmed and the one pattern reads both.
+    val whole = timestamp.substringBefore('.').substringBefore('Z') + "Z"
+
+    return runCatching {
+        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+            .apply { timeZone = TimeZone.getTimeZone("UTC") }
+            .parse(whole)
+            ?.time
+    }.getOrNull()
+}
+
+/**
+ * One of the site's three controls: a button carrying the value in force, and its options behind it.
+ *
+ * A menu rather than a row of chips, because that is what the site has: the chips this screen used
+ * to show were its own invention, and there are nine options between the three of these.
+ */
+@Composable
+private fun <T> CatalogFilter(
+    text: @Composable (T) -> String,
+    options: List<T>,
+    selected: T,
+    onSelect: (T) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+
+    Box {
+        FilledTonalButton(onClick = { open = true }) {
+            Text(
+                text = text(selected),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(text(option)) },
+                    trailingIcon = { Checkbox(checked = option == selected, onCheckedChange = null) },
+                    onClick = {
+                        onSelect(option)
+                        open = false
+                    }
+                )
+            }
+        }
+    }
 }
 
 /**
@@ -110,8 +203,11 @@ fun CatalogScreen(
     var repos by remember { mutableStateOf<List<ModuleRepo>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
-    var sort by remember { mutableStateOf(CatalogSort.STARS) }
-    var language by remember { mutableStateOf<String?>(null) }
+    // The directory site's three controls, with its own defaults: most recently updated, every
+    // category, any age.
+    var sort by remember { mutableStateOf(CatalogSort.UPDATED) }
+    var category by remember { mutableStateOf<String?>(null) }
+    var updatedWithin by remember { mutableStateOf(UpdatedWithin.ANY) }
 
     var openRepo by remember { mutableStateOf<String?>(null) }
     var latest by remember { mutableStateOf<Map<String, Release?>>(emptyMap()) }
@@ -128,30 +224,33 @@ fun CatalogScreen(
 
     val all = repos ?: emptyList()
 
-    val languages = remember(all) {
-        all.mapNotNull { it.language }
-            .groupingBy { it }
-            .eachCount()
-            .entries
-            .sortedByDescending { it.value }
-            .map { it.key }
-            .take(8)
+    // Every category the list carries, which is what the site's own category menu offers. The
+    // few languages this screen used to filter by were this app's invention, not the site's.
+    val categories = remember(all) {
+        all.map { it.category }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
     }
 
-    val shown = remember(all, query, sort, language) {
+    val shown = remember(all, query, sort, category, updatedWithin) {
+        val now = System.currentTimeMillis()
+
         all.filter { repo ->
+            // Their search box matches what theirs does: what the app is called, what it says
+            // about itself, the topics on it, its language, and who wrote it.
             val matchesQuery = query.isBlank() ||
                 repo.fullName.contains(query, ignoreCase = true) ||
-                repo.description.contains(query, ignoreCase = true)
+                repo.description.contains(query, ignoreCase = true) ||
+                repo.language.orEmpty().contains(query, ignoreCase = true) ||
+                repo.owner?.login.orEmpty().contains(query, ignoreCase = true) ||
+                repo.topics.any { it.contains(query, ignoreCase = true) }
 
-            matchesQuery && (language == null || repo.language == language)
-        }.sortedWith(
-            when (sort) {
-                CatalogSort.STARS -> compareByDescending { it.stars }
-                CatalogSort.UPDATED -> compareByDescending { it.updatedAt }
-                CatalogSort.NAME -> compareBy { it.name.lowercase() }
-            }
-        )
+            val matchesCategory = category == null || repo.category == category
+            val matchesAge = withinDays(repo.updatedAt, updatedWithin.days, now)
+
+            matchesQuery && matchesCategory && matchesAge
+        }.sortedWith(sort.order)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -185,32 +284,42 @@ fun CatalogScreen(
                 )
             }
 
-            if (kind == CatalogKind.APPS) {
-                item {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(CatalogSort.entries.size) { index ->
-                            val option = CatalogSort.entries[index]
-                            FilterChip(
-                                selected = sort == option,
-                                onClick = { sort = option },
-                                label = { Text(stringResource(option.label)) }
-                            )
-                        }
-                    }
-                }
-
-                if (languages.isNotEmpty()) {
+            item {
+                // The site's three controls in its own words: the order, the category, and how
+                // recently updated. One row, because between them they say the current answer.
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(languages.size) { index ->
-                                val name = languages[index]
-                                FilterChip(
-                                    selected = language == name,
-                                    onClick = { language = if (language == name) null else name },
-                                    label = { Text(name) }
+                        CatalogFilter(
+                            text = {
+                                stringResource(R.string.catalog_filter_sort, stringResource(it.label))
+                            },
+                            options = CatalogSort.entries,
+                            selected = sort,
+                            onSelect = { sort = it }
+                        )
+                    }
+
+                    item {
+                        CatalogFilter(
+                            text = { it ?: stringResource(R.string.catalog_filter_all_categories) },
+                            options = listOf(null) + categories,
+                            selected = category,
+                            onSelect = { category = it }
+                        )
+                    }
+
+                    item {
+                        CatalogFilter(
+                            text = {
+                                stringResource(
+                                    R.string.catalog_filter_updated,
+                                    stringResource(it.label)
                                 )
-                            }
-                        }
+                            },
+                            options = UpdatedWithin.entries,
+                            selected = updatedWithin,
+                            onSelect = { updatedWithin = it }
+                        )
                     }
                 }
             }
