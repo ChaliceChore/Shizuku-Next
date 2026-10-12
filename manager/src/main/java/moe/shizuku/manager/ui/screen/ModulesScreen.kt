@@ -34,7 +34,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Wysiwyg
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
+import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -45,13 +50,18 @@ import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearWavyProgressIndicator
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -117,8 +127,13 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     var modules by remember { mutableStateOf<List<AdbModule>>(emptyList()) }
     var updates by remember { mutableStateOf<Map<String, ModuleUpdate>>(emptyMap()) }
     var query by remember { mutableStateOf("") }
+    var searching by remember { mutableStateOf(false) }
+    var refreshing by remember { mutableStateOf(false) }
+    var sortDialog by remember { mutableStateOf(false) }
+    var sort by remember { mutableStateOf(ModuleSort.load()) }
     var busy by remember { mutableStateOf(false) }
     var webUiFor by remember { mutableStateOf<AdbModule?>(null) }
+    var actionFor by remember { mutableStateOf<AdbModule?>(null) }
     var catalogOpen by remember { mutableStateOf(false) }
     var installDialog by remember { mutableStateOf(false) }
     var tuneDialog by remember { mutableStateOf(false) }
@@ -134,10 +149,23 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     var resultTitle by remember { mutableStateOf("") }
     var errorRes by remember { mutableStateOf<Int?>(null) }
     var pendingDelete by remember { mutableStateOf<AdbModule?>(null) }
+    var pendingRemove by remember { mutableStateOf<AdbModule?>(null) }
     var running by remember { mutableStateOf<Set<String>>(emptySet()) }
 
+    /**
+     * Reads the list back, and with it which services are actually running.
+     *
+     * The running ones are asked of the processes rather than remembered: a service started before
+     * this screen was opened is still running, and its card has to say Stop when it is.
+     */
+    suspend fun refreshNow() {
+        val listed = AdbModuleManager.list(context)
+        modules = listed
+        running = listed.filter { AdbModuleManager.isServiceRunning(it) }.map { it.id }.toSet()
+    }
+
     fun reload() {
-        scope.launch { modules = AdbModuleManager.list(context) }
+        scope.launch { refreshNow() }
     }
 
     /**
@@ -168,7 +196,7 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     }
 
     /** What the list shows, which is all of them until something is typed. */
-    val shown = remember(modules, query) {
+    val shown = remember(modules, query, sort) {
         if (query.isBlank()) {
             modules
         } else {
@@ -177,12 +205,18 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                     module.id.contains(query, ignoreCase = true) ||
                     module.prop.description?.contains(query, ignoreCase = true) == true
             }
-        }
+        }.sortedWith(sort.order())
     }
 
-    // Both of these take the screen rather than opening over it: a page and a list are not dialogs.
+    // These take the screen rather than opening over the list: a page, a console and a catalog are
+    // not dialogs.
     webUiFor?.let { module ->
         ModuleWebUiScreen(module = module, onBack = { webUiFor = null })
+        return
+    }
+
+    actionFor?.let { module ->
+        ModuleActionScreen(module = module, onBack = { actionFor = null })
         return
     }
 
@@ -225,9 +259,90 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             TopAppBar(
-                title = { Text(stringResource(R.string.tools_modules)) },
+                title = {
+                    // Their search bar: the title itself becomes the field, rather than a field
+                    // sitting in the list below it.
+                    if (searching) {
+                        TextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text(stringResource(R.string.modules_search)) },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                    } else {
+                        Text(stringResource(R.string.tools_modules))
+                    }
+                },
                 windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 actions = {
+                    if (searching) {
+                        IconButton(onClick = { searching = false; query = "" }) {
+                            Icon(Icons.Filled.Close, contentDescription = null)
+                        }
+                    } else {
+                        IconButton(onClick = { searching = true }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Search,
+                                contentDescription = stringResource(R.string.modules_search)
+                            )
+                        }
+
+                        // Their sort, behind the overflow as a menu: one order at a time and their
+                        // three preferences for what comes first.
+                        Box {
+                            IconButton(onClick = { sortDialog = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Sort,
+                                    contentDescription = stringResource(R.string.modules_sort)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = sortDialog,
+                                onDismissRequest = { sortDialog = false }
+                            ) {
+                                SortChoice(R.string.modules_sort_a_to_z, sort.aToZ) {
+                                    sort = sort.copy(
+                                        aToZ = true, zToA = false, sizeLowToHigh = false,
+                                        sizeHighToLow = false
+                                    ).saved()
+                                }
+                                SortChoice(R.string.modules_sort_z_to_a, sort.zToA) {
+                                    sort = sort.copy(
+                                        aToZ = false, zToA = true, sizeLowToHigh = false,
+                                        sizeHighToLow = false
+                                    ).saved()
+                                }
+                                SortChoice(R.string.modules_sort_size_low_to_high, sort.sizeLowToHigh) {
+                                    sort = sort.copy(
+                                        aToZ = false, zToA = false, sizeLowToHigh = true,
+                                        sizeHighToLow = false
+                                    ).saved()
+                                }
+                                SortChoice(R.string.modules_sort_size_high_to_low, sort.sizeHighToLow) {
+                                    sort = sort.copy(
+                                        aToZ = false, zToA = false, sizeLowToHigh = false,
+                                        sizeHighToLow = true
+                                    ).saved()
+                                }
+                                SortChoice(R.string.modules_sort_enabled_first, sort.enabledFirst) {
+                                    sort = sort.copy(enabledFirst = !sort.enabledFirst).saved()
+                                }
+                                SortChoice(R.string.modules_sort_action_first, sort.actionFirst) {
+                                    sort = sort.copy(actionFirst = !sort.actionFirst).saved()
+                                }
+                                SortChoice(R.string.modules_sort_webui_first, sort.webUiFirst) {
+                                    sort = sort.copy(webUiFirst = !sort.webUiFirst).saved()
+                                }
+                            }
+                        }
+
                     // Their modules screen is where repositories are found from, not the
                     // other way round: the catalog belongs to the modules section, and this
                     // is the second way in - the floating button's dialog is the first.
@@ -243,6 +358,7 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                             contentDescription = stringResource(R.string.modules_settings)
                         )
                     }
+                    }
                 }
             )
 
@@ -250,6 +366,18 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                 LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
+            // Their pull-to-refresh: a module is somebody else's file, and it changes from
+            // outside as often as from here.
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = {
+                    refreshing = true
+                    scope.launch {
+                        refreshNow()
+                        refreshing = false
+                    }
+                }
+            ) {
             LazyColumn(
                 contentPadding = PaddingValues(
                     start = 16.dp,
@@ -259,21 +387,6 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Their search, over the module list: a module whose page has a name nobody
-                // remembers is found by the thing its author called it.
-                item {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(stringResource(R.string.modules_search)) },
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Search, contentDescription = null)
-                        }
-                    )
-                }
-
                 if (shown.isEmpty()) {
                     item {
                         Text(
@@ -296,6 +409,7 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                             module = module,
                             expanded = module.id in expanded,
                             serviceRunning = module.id in running,
+                            removed = module.removed,
                             update = updates[module.id],
                             onExpandToggle = {
                                 expanded = if (module.id in expanded) {
@@ -308,16 +422,7 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                                 AdbModuleManager.setEnabled(module, checked)
                                 reload()
                             },
-                            onRunAction = {
-                                scope.launch {
-                                    busy = true
-                                    val action = AdbModuleManager.runAction(module, approve)
-                                    busy = false
-                                    resultTitle = module.name
-                                    result = action
-                                    reload()
-                                }
-                            },
+                            onRunAction = { actionFor = module },
                             onToggleService = {
                                 if (module.id in running) {
                                     AdbModuleManager.stopService(module)
@@ -350,10 +455,16 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                                     reload()
                                 }
                             },
+                            onRemove = { pendingRemove = module },
+                            onRestore = {
+                                AdbModuleManager.setRemoved(module, false)
+                                reload()
+                            },
                             onDelete = { pendingDelete = module }
                         )
                     }
                 }
+            }
             }
         }
 
@@ -512,6 +623,26 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
         )
     }
 
+    pendingRemove?.let { module ->
+        AlertDialog(
+            onDismissRequest = { pendingRemove = null },
+            title = { Text(stringResource(R.string.modules_remove_confirm, module.name)) },
+            text = { Text(stringResource(R.string.modules_remove_confirm_message)) },
+            confirmButton = {
+                PillButton(onClick = {
+                    pendingRemove = null
+                    AdbModuleManager.setRemoved(module, true)
+                    reload()
+                }) { Text(stringResource(R.string.modules_remove)) }
+            },
+            dismissButton = {
+                PillButtonQuiet(onClick = { pendingRemove = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
+
     pendingDelete?.let { module ->
         AlertDialog(
             onDismissRequest = { pendingDelete = null },
@@ -560,6 +691,7 @@ private fun ModuleCard(
     module: AdbModule,
     expanded: Boolean,
     serviceRunning: Boolean,
+    removed: Boolean,
     update: ModuleUpdate?,
     onExpandToggle: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
@@ -567,6 +699,8 @@ private fun ModuleCard(
     onToggleService: () -> Unit,
     onOpenWebUi: () -> Unit,
     onUpdate: (ModuleUpdate) -> Unit,
+    onRemove: () -> Unit,
+    onRestore: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var bitmap by remember(module.banner) { mutableStateOf<ImageBitmap?>(null) }
@@ -656,7 +790,15 @@ private fun ModuleCard(
                 ) {
                     ModuleChip(text = formatSize(module.sizeBytes))
 
-                    if (!module.enabled) {
+                    // Their chip for a module on its way out, in their colour.
+                    if (removed) {
+                        ModuleChip(
+                            text = stringResource(R.string.modules_uninstalled),
+                            container = MaterialTheme.colorScheme.errorContainer,
+                            content = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                    if (!module.enabled && !removed) {
                         ModuleChip(
                             text = stringResource(R.string.modules_disabled),
                             container = MaterialTheme.colorScheme.errorContainer,
@@ -712,7 +854,10 @@ private fun ModuleCard(
                             ModuleCompactButton(
                                 icon = Icons.Outlined.Terminal,
                                 label = stringResource(R.string.modules_action_short),
-                                showLabel = !module.hasWebUi,
+                                // Their rule would hide this word behind the WebUI button; here it
+                                // is the one thing on the row worth naming, so it keeps its word and
+                                // the icon buttons give up theirs.
+                                showLabel = true,
                                 onClick = onRunAction
                             )
                             Spacer(modifier = Modifier.weight(0.1f, true))
@@ -758,10 +903,30 @@ private fun ModuleCard(
                             Spacer(modifier = Modifier.weight(0.1f, true))
                         }
 
+                        // Their destructive pair: Remove marks a module and can be taken back,
+                        // Restore takes the mark off, and Delete is the one that ends it.
+                        if (removed) {
+                            ModuleCompactButton(
+                                icon = Icons.Outlined.Restore,
+                                label = stringResource(R.string.modules_restore),
+                                showLabel = true,
+                                onClick = onRestore
+                            )
+                            Spacer(modifier = Modifier.weight(0.1f, true))
+                        } else {
+                            ModuleCompactButton(
+                                icon = Icons.Outlined.RemoveCircleOutline,
+                                label = stringResource(R.string.modules_remove),
+                                showLabel = false,
+                                onClick = onRemove
+                            )
+                            Spacer(modifier = Modifier.weight(0.1f, true))
+                        }
+
                         ModuleCompactButton(
-                            icon = Icons.Outlined.Delete,
+                            icon = Icons.Outlined.DeleteForever,
                             label = stringResource(R.string.modules_delete),
-                            showLabel = !module.hasAction && !module.hasService && !module.hasWebUi,
+                            showLabel = false,
                             onClick = onDelete
                         )
                     }
@@ -864,6 +1029,69 @@ private fun installProblem(problem: ModuleInstallProblem): Int = when (problem) 
     ModuleInstallProblem.TOO_MANY_ENTRIES -> R.string.modules_error_too_many_entries
     ModuleInstallProblem.TOO_LARGE -> R.string.modules_error_too_large
     ModuleInstallProblem.SCRIPT_TOO_LARGE -> R.string.modules_error_script_too_large
+}
+
+/**
+ * The order the module list is shown in: one of their orders at a time, plus their three
+ * preferences for what comes first - kept under their own key names in this app's preferences, so
+ * the choices mean the same thing to anybody who has seen both screens.
+ */
+private data class ModuleSort(
+    val aToZ: Boolean = true,
+    val zToA: Boolean = false,
+    val sizeLowToHigh: Boolean = false,
+    val sizeHighToLow: Boolean = false,
+    val enabledFirst: Boolean = false,
+    val actionFirst: Boolean = false,
+    val webUiFirst: Boolean = false,
+) {
+    fun order(): Comparator<AdbModule> {
+        val byDirection = when {
+            zToA -> compareByDescending<AdbModule> { it.name.lowercase() }
+            sizeLowToHigh -> compareBy { it.sizeBytes }
+            sizeHighToLow -> compareByDescending { it.sizeBytes }
+            else -> compareBy { it.name.lowercase() }
+        }
+
+        return compareByDescending<AdbModule> { enabledFirst && it.enabled }
+            .thenByDescending { actionFirst && it.hasAction }
+            .thenByDescending { webUiFirst && it.hasWebUi }
+            .then(byDirection)
+    }
+
+    fun saved(): ModuleSort {
+        ModuleSettings.setSortFlag(ModuleSettings.SORT_A_TO_Z, aToZ)
+        ModuleSettings.setSortFlag(ModuleSettings.SORT_Z_TO_A, zToA)
+        ModuleSettings.setSortFlag(ModuleSettings.SORT_SIZE_LOW_TO_HIGH, sizeLowToHigh)
+        ModuleSettings.setSortFlag(ModuleSettings.SORT_SIZE_HIGH_TO_LOW, sizeHighToLow)
+        ModuleSettings.setSortFlag(ModuleSettings.SORT_ENABLED_FIRST, enabledFirst)
+        ModuleSettings.setSortFlag(ModuleSettings.SORT_ACTION_FIRST, actionFirst)
+        ModuleSettings.setSortFlag(ModuleSettings.SORT_WEBUI_FIRST, webUiFirst)
+
+        return this
+    }
+
+    companion object {
+        fun load(): ModuleSort = ModuleSort(
+            aToZ = ModuleSettings.sortFlag(ModuleSettings.SORT_A_TO_Z, true),
+            zToA = ModuleSettings.sortFlag(ModuleSettings.SORT_Z_TO_A),
+            sizeLowToHigh = ModuleSettings.sortFlag(ModuleSettings.SORT_SIZE_LOW_TO_HIGH),
+            sizeHighToLow = ModuleSettings.sortFlag(ModuleSettings.SORT_SIZE_HIGH_TO_LOW),
+            enabledFirst = ModuleSettings.sortFlag(ModuleSettings.SORT_ENABLED_FIRST),
+            actionFirst = ModuleSettings.sortFlag(ModuleSettings.SORT_ACTION_FIRST),
+            webUiFirst = ModuleSettings.sortFlag(ModuleSettings.SORT_WEBUI_FIRST)
+        )
+    }
+}
+
+/** One of their sort options: the word, and a tick when it is the one in force. */
+@Composable
+private fun SortChoice(label: Int, selected: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(stringResource(label)) },
+        trailingIcon = { Checkbox(checked = selected, onCheckedChange = null) },
+        onClick = onClick
+    )
 }
 
 /**
