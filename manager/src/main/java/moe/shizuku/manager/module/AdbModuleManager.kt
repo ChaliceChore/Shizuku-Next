@@ -104,6 +104,24 @@ object AdbModuleManager {
             ?.let { ModuleCatalog.updateManifest(it) }
             ?.takeIf { it.isNewerThan(module) }
 
+    /**
+     * Marks a module as removed, or puts it back.
+     *
+     * Marking also switches it off: a module on its way out does not get to run a service on the
+     * way, and being switched off is what every run path already checks.
+     */
+    fun setRemoved(module: AdbModule, removed: Boolean): Boolean = runCatching {
+        val marker = File(module.directory, AdbModule.REMOVE_MARKER)
+
+        if (removed) {
+            marker.parentFile?.mkdirs()
+            marker.exists() || marker.createNewFile()
+            setEnabled(module, false)
+        } else {
+            !marker.exists() || marker.delete()
+        }
+    }.getOrDefault(false)
+
     /** Switches a module on or off, which is the one marker file the format uses. */
     fun setEnabled(module: AdbModule, enabled: Boolean): Boolean = runCatching {
         val marker = File(module.directory, AdbModule.DISABLE_MARKER)
@@ -162,6 +180,9 @@ object AdbModuleManager {
         }
         val script = module.serviceScript
             ?: return ModuleActionResult(-1, "", "This module has no service script.")
+        if (module.removed) {
+            return ModuleActionResult(-1, "", "The module is marked for removal.")
+        }
         if (!module.enabled) {
             return ModuleActionResult(-1, "", "The module is switched off.")
         }
@@ -235,6 +256,7 @@ object AdbModuleManager {
         log: File,
     ): ModuleActionResult {
         if (script == null) return ModuleActionResult(-1, "", missing)
+        if (module.removed) return ModuleActionResult(-1, "", "The module is marked for removal.")
         if (!module.enabled) return ModuleActionResult(-1, "", "The module is switched off.")
 
         val mode = ModuleSettings.getAccessMode()
