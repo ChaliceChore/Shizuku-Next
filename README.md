@@ -54,7 +54,7 @@ Get the latest build from [Releases](https://github.com/rushiranpise/Shizuku-Nex
 - Tasker and other automation support through intents and status broadcasts.
 
 ### Modules and compatibility
-- Experimental ADB module support, including module actions, services, and WebUI.
+- Experimental ADB module support, including module actions, services, and WebUI. [Writing a module](docs/adb-modules.md) covers the format: `module.prop`, the environment a script runs in, the WebUI bridge, trust, and how a module gets found.
 - Stealth mode and in-app updates.
 - Android TV and VR-friendly UI support.
 - MediaTek compatibility fixes and improvements for some devices.
