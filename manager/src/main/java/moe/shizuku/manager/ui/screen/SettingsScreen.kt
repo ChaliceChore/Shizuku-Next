@@ -697,18 +697,6 @@ fun SettingsScreen(bottomPadding: Dp, onOpenDetail: (Detail) -> Unit) {
                     item {
                         SegmentedListItem(
                             centerSlots = true,
-                            leadingContent = { SettingsIcon(ModulesIcon) },
-                            headlineContent = { Text(stringResource(R.string.tools_modules)) },
-                            supportingContent = { Text(stringResource(R.string.modules_summary)) },
-                            trailingContent = {
-                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
-                            },
-                            onClick = { onOpenDetail(Detail.MODULES) }
-                        )
-                    }
-                    item {
-                        SegmentedListItem(
-                            centerSlots = true,
                             leadingContent = { SettingsIcon(Icons.Outlined.Terminal) },
                             headlineContent = { Text(stringResource(R.string.tools_terminal)) },
                             supportingContent = { Text(stringResource(R.string.tools_terminal_summary)) },

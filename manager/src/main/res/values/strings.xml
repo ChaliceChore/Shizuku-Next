@@ -404,6 +404,14 @@
     <string name="action_start">Start</string>
     <string name="tools_stealth">Stealth mode</string>
     <string name="tools_modules">Modules</string>
+    <string name="tab_modules">Modules</string>
+    <string name="modules_catalog">Find modules</string>
+    <string name="modules_catalog_install">Install</string>
+    <string name="modules_catalog_installing">Installing</string>
+    <string name="modules_catalog_no_zip">No module zip in this release</string>
+    <string name="modules_catalog_no_releases">This repository has no releases.</string>
+    <string name="modules_catalog_installed">Installed from here</string>
+    <string name="modules_card_line">Version: %1$s - %2$s</string>
     <string name="modules_summary">Add features to Shizuku with modules from the community</string>
     <string name="modules_warning">A module is somebody else\'s shell script, and it runs through Shizuku with the same access Shizuku has. Install only what you trust, and read the commands it asks to run.</string>
     <string name="modules_none">No modules installed yet.</string>

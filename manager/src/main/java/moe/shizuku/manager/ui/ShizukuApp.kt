@@ -35,6 +35,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Science
@@ -150,9 +152,6 @@ enum class Detail(
     INTENTS,
     PERMISSIONS,
 
-    /** ADB modules: other people's shell scripts, installed and run through Shizuku. */
-    MODULES,
-
     /** The community's module index, shown here only when there was no browser to open it in. */
     MORE_APPS
 }
@@ -205,6 +204,7 @@ private class TabPill {
 private val tabs = listOf(
     Tab(R.string.tab_home, Icons.Filled.Home, Icons.Outlined.Home),
     Tab(R.string.tab_apps, Icons.Filled.Apps, Icons.Outlined.Apps),
+    Tab(R.string.tab_modules, Icons.Filled.Extension, Icons.Outlined.Extension),
     // Labs holds the things that are gone to rather than lived in: the app-ops list and the
     // shell to begin with, and whatever else turns out to belong there. Each was a tab of its
     // own before, which is a lot of the bar for two screens that are mostly a list you read
@@ -323,7 +323,6 @@ fun ShizukuApp() {
 
                             Detail.MORE_APPS -> MoreAppsScreen(onBack = { detail = null })
 
-                            Detail.MODULES -> ModulesScreen(onBack = { detail = null })
                             Detail.STEALTH -> StealthScreen(onBack = { detail = null })
                             Detail.TERMINAL -> TerminalScreen(onBack = { detail = null })
                             Detail.INTENTS -> IntentsScreen(onBack = { detail = null })
@@ -436,8 +435,9 @@ private fun MainTabs(
                         warmUp = warmUp,
                         onGrantedCount = { grantedCount = it }
                     )
-                    2 -> LabsScreen(bottomPadding = bottomPadding, onOpenDetail = onOpenDetail)
-                    3 -> SettingsScreen(bottomPadding = bottomPadding, onOpenDetail = onOpenDetail)
+                    2 -> ModulesScreen(bottomPadding = bottomPadding)
+                    3 -> LabsScreen(bottomPadding = bottomPadding, onOpenDetail = onOpenDetail)
+                    4 -> SettingsScreen(bottomPadding = bottomPadding, onOpenDetail = onOpenDetail)
                 }
             }
         }

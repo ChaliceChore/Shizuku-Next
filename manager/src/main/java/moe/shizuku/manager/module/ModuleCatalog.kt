@@ -1,0 +1,122 @@
+package moe.shizuku.manager.module
+
+import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import okhttp3.OkHttpClient
+import okhttp3.Request
+
+/** A repository in the community's module index, as the index lists it. */
+@Serializable
+data class ModuleRepo(
+    @SerialName("full_name") val fullName: String,
+    @SerialName("html_url") val htmlUrl: String = "",
+    val description: String = "",
+    @SerialName("stargazers_count") val stars: Int = 0,
+    val language: String? = null,
+    val owner: Owner? = null,
+) {
+    @Serializable
+    data class Owner(
+        val login: String = "",
+        @SerialName("avatar_url") val avatarUrl: String = "",
+    )
+
+    /** The half of a `owner/name` a list shows, the owner being the less interesting one. */
+    val name: String get() = fullName.substringAfter('/')
+
+    val avatarUrl: String? get() = owner?.avatarUrl?.takeIf { it.isNotEmpty() }
+}
+
+/** One file of a release. A module is the one among them that is a zip. */
+@Serializable
+data class ReleaseAsset(
+    val name: String,
+    @SerialName("browser_download_url") val url: String,
+    val size: Long = 0,
+)
+
+@Serializable
+data class Release(
+    @SerialName("tag_name") val tag: String = "",
+    val name: String = "",
+    val assets: List<ReleaseAsset> = emptyList(),
+) {
+    /** The module zip this release offers, when it offers one. */
+    val moduleZip: ReleaseAsset?
+        get() = assets.firstOrNull { it.name.endsWith(".zip", ignoreCase = true) }
+
+    /** What a row calls this release: its name if it has one, its tag otherwise. */
+    val label: String get() = name.ifEmpty { tag }
+}
+
+/**
+ * Where modules to install are found.
+ *
+ * Two sources, and neither of them needs a GitHub token. The list of repositories is a plain file
+ * over https - the community's own index - so reading it costs nothing and never runs into a rate
+ * limit. A repository's releases do come from the GitHub API, which without a token is rate limited
+ * to sixty calls an hour: that is a limit on *browsing*, which a person does slowly, and it is
+ * reported as what it is rather than hidden behind a token nobody asked for.
+ */
+object ModuleCatalog {
+
+    /** The community index: repositories worth looking at, in the shape the index publishes. */
+    const val INDEX_URL =
+        "https://raw.githubusercontent.com/rushiranpise/shizuku-modules/main/data/repos.json"
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    suspend fun index(url: String = INDEX_URL): List<ModuleRepo> =
+        withContext(Dispatchers.IO) { json.decodeFromString(get(url)) }
+
+    /** The releases of [repoFullName], newest first, as GitHub lists them. */
+    suspend fun releases(repoFullName: String): List<Release> =
+        withContext(Dispatchers.IO) {
+            json.decodeFromString(get("https://api.github.com/repos/$repoFullName/releases"))
+        }
+
+    /** The bytes of an asset. A module is a few hundred kilobytes at most, so it is held whole. */
+    suspend fun download(url: String): ByteArray =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw ModuleCatalogException(httpMessage(response.code))
+                response.body?.bytes() ?: throw ModuleCatalogException("The download came back empty.")
+            }
+        }
+
+    private fun get(url: String): String {
+        val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw ModuleCatalogException(httpMessage(response.code))
+            return response.body?.string() ?: throw ModuleCatalogException("The answer came back empty.")
+        }
+    }
+
+    private const val USER_AGENT = "Shizuku-Next"
+
+    /**
+     * What a failed call means to the person who made it.
+     *
+     * The one worth spelling out is 403: the API says that both for a token that is not good enough
+     * and for having asked too often without one, and only the second can happen here.
+     */
+    private fun httpMessage(code: Int): String = when (code) {
+        403, 429 -> "GitHub is rate limiting this device. Try again in a little while."
+        404 -> "That repository is not there any more."
+        else -> "GitHub answered $code."
+    }
+}
+
+class ModuleCatalogException(message: String) : Exception(message)

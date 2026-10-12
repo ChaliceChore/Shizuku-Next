@@ -2,6 +2,7 @@ package moe.shizuku.manager.module
 
 import android.content.Context
 import android.net.Uri
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
 import java.util.concurrent.ConcurrentHashMap
@@ -63,6 +64,16 @@ object AdbModuleManager {
             ?: throw ModuleInstallException(ModuleInstallProblem.NOT_A_MODULE)
 
         stream.use { ModulePackage.install(modulesRoot(context), it) }
+    }
+
+    /**
+     * Installs a module that has already been downloaded.
+     *
+     * The catalog hands bytes rather than a file because what it has is an http response: there is
+     * no reason to write a module to disk twice on the way in.
+     */
+    suspend fun install(context: Context, bytes: ByteArray): AdbModule = withContext(Dispatchers.IO) {
+        ByteArrayInputStream(bytes).use { ModulePackage.install(modulesRoot(context), it) }
     }
 
     /** Switches a module on or off, which is the one marker file the format uses. */
