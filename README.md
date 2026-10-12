@@ -592,3 +592,13 @@ The `:manager:assembleDebug` task generates a debuggable server. You can attach 
 ## 📃 License
 
 All code files in this project are licensed under [Apache 2.0](LICENSE)
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=rushiranpise%2Fshizuku-next&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=rushiranpise/shizuku-next&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=rushiranpise/shizuku-next&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=rushiranpise/shizuku-next&type=date&legend=top-left" />
+ </picture>
+</a>
