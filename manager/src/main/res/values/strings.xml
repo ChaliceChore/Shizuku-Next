@@ -449,11 +449,6 @@
     <string name="modules_sort_enabled_first">Enabled first</string>
     <string name="modules_sort_action_first">With an action first</string>
     <string name="modules_sort_webui_first">With a WebUI first</string>
-    <string name="modules_uninstalled">Uninstalled</string>
-    <string name="modules_restore">Restore</string>
-    <string name="modules_remove">Remove</string>
-    <string name="modules_remove_confirm">Remove %1$s?</string>
-    <string name="modules_remove_confirm_message">The module is switched off and left in place, so it can be restored from this screen later.</string>
     <string name="modules_action_stop">Stop</string>
     <string name="modules_action_running">Running...</string>
     <string name="modules_web_ui_short">WebUI</string>

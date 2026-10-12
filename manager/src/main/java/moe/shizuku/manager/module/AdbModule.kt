@@ -20,15 +20,6 @@ data class AdbModule(
     /** Magisk's convention, which the ADB module format inherits: a `disable` file means off. */
     val enabled: Boolean get() = !File(directory, DISABLE_MARKER).exists()
 
-    /**
-     * Whether the module has been marked for removal.
-     *
-     * Their convention, and the reason it is worth having: uninstall is a decision that can be
-     * regretted, so it marks the module and leaves its files alone until the user says otherwise
-     * again - which is what their Restore button is for.
-     */
-    val removed: Boolean get() = File(directory, REMOVE_MARKER).exists()
-
     val logsDir: File get() = File(directory, LOGS_DIR)
 
     val lastActionLog: File get() = File(logsDir, "action-last.log")
@@ -75,7 +66,6 @@ data class AdbModule(
 
     companion object {
         const val DISABLE_MARKER = "disable"
-        const val REMOVE_MARKER = "remove"
         const val LOGS_DIR = "logs"
     }
 }
