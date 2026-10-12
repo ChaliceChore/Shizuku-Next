@@ -261,7 +261,9 @@ fun ModulesScreen(
     if (catalogOpen) {
         CatalogScreen(
             kind = CatalogKind.MODULES,
-            installedIds = modules.map { it.id }.toSet(),
+            // What a repository is recognised by when its module is already here: each module's id,
+            // and the repository it was installed from when this app is the one that installed it.
+            installedKeys = ModuleSettings.installedKeys(modules),
             onBack = { catalogOpen = false },
             onInstalled = {
                 catalogOpen = false

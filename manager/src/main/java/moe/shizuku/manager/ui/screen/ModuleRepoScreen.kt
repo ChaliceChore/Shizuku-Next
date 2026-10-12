@@ -91,7 +91,7 @@ import moe.shizuku.manager.utils.CustomTabsHelper
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModuleRepoScreen(
-    installedIds: Set<String>,
+    installedKeys: Set<String>,
     onBack: () -> Unit,
     onInstalled: () -> Unit,
 ) {
@@ -276,7 +276,7 @@ fun ModuleRepoScreen(
                             ModuleRepoCard(
                                 repo = repo,
                                 release = releases[repo.fullName],
-                                installed = repo.fullName in installedIds,
+                                installed = ModuleSettings.installedMatch(installedKeys, repo),
                                 installing = installing == repo.fullName,
                                 onLoadRelease = {
                                     if (!releases.containsKey(repo.fullName)) {
@@ -295,7 +295,8 @@ fun ModuleRepoScreen(
                                         runCatching {
                                             AdbModuleManager.install(
                                                 context,
-                                                ModuleCatalog.download(zipUrl)
+                                                ModuleCatalog.download(zipUrl),
+                                                source = repo.fullName
                                             )
                                         }
                                             .onSuccess { onInstalled() }
@@ -380,6 +381,15 @@ private fun ModuleRepoCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // First in the row, because it is the one fact that decides whether the card is
+                    // worth reading at all: this module is already on the phone.
+                    if (installed) {
+                        RepoLabel(
+                            text = stringResource(R.string.modules_catalog_installed),
+                            container = MaterialTheme.colorScheme.tertiaryContainer,
+                            content = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
                     RepoLabel(
                         text = repo.stars.toString(),
                         icon = Icons.Filled.Star,
@@ -448,13 +458,7 @@ private fun ModuleRepoCard(
                     }
                 }
 
-                if (installed) {
-                    Text(
-                        text = stringResource(R.string.modules_catalog_installed),
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 10.dp)
-                    )
-                }
+
             }
         }
     }

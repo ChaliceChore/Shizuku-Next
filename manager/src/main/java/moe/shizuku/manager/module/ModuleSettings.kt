@@ -13,6 +13,7 @@ object ModuleSettings {
     private const val KEY_ACCESS_MODE = "module_access_mode"
     private const val KEY_BACKGROUND = "module_allow_background"
     private const val KEY_TRUSTED_PREFIX = "module_trusted_"
+    private const val KEY_SOURCE_PREFIX = "module_source_"
 
     fun getAccessMode(): ModuleAccessMode =
         ModuleAccessMode.fromValue(ShizukuSettings.getPreferences().getString(KEY_ACCESS_MODE, null))
@@ -36,6 +37,43 @@ object ModuleSettings {
             .putBoolean(KEY_TRUSTED_PREFIX + moduleId, trusted)
             .apply()
     }
+
+    /**
+     * Where a module came from, when this app installed it from the catalogue.
+     *
+     * A module's directory name is its own id, which says nothing about the repository it was built
+     * from - so the catalogue, which shows repositories, had no way to tell that one of them was
+     * already installed: it compared the repository's name against the ids and the two could never
+     * match, since an id cannot contain a slash. Recording the source at install is what makes the
+     * question answerable, and it is the only answer that is a fact rather than a guess.
+     */
+    fun setSource(moduleId: String, repoFullName: String) {
+        ShizukuSettings.getPreferences().edit()
+            .putString(KEY_SOURCE_PREFIX + moduleId, repoFullName)
+            .apply()
+    }
+
+    fun sourceOf(moduleId: String): String? =
+        ShizukuSettings.getPreferences().getString(KEY_SOURCE_PREFIX + moduleId, null)
+
+    /** Everything an installed module answers to: its own id, and the repository it came from. */
+    fun installedKeys(modules: List<AdbModule>): Set<String> = buildSet {
+        modules.forEach { module ->
+            add(module.id.lowercase())
+            sourceOf(module.id)?.lowercase()?.let(::add)
+        }
+    }
+
+    /**
+     * Whether a repository's module is already installed, as far as [keys] can tell.
+     *
+     * The full name matches when this app recorded where a module came from. A repository's own
+     * name matches a module's id, which is what a module installed by hand has to go on: a module
+     * built from a repository is usually named after it. That half is a guess, and it can only be
+     * wrong in the direction of a mark that is missing rather than one that is not earned.
+     */
+    fun installedMatch(keys: Set<String>, repo: ModuleRepo): Boolean =
+        repo.fullName.lowercase() in keys || repo.name.lowercase() in keys
 
     /**
      * The order the module list is shown in, under the same keys their screen keeps it in, so the

@@ -191,7 +191,7 @@ private fun <T> CatalogFilter(
 @Composable
 fun CatalogScreen(
     kind: CatalogKind,
-    installedIds: Set<String>,
+    installedKeys: Set<String>,
     onBack: () -> Unit,
     onInstalled: () -> Unit,
 ) {
@@ -199,7 +199,7 @@ fun CatalogScreen(
     // kind is kept so both callers read the same either way.
     if (kind == CatalogKind.MODULES) {
         ModuleRepoScreen(
-            installedIds = installedIds,
+            installedKeys = installedKeys,
             onBack = onBack,
             onInstalled = onInstalled
         )

@@ -84,9 +84,13 @@ object AdbModuleManager {
      * The catalog hands bytes rather than a file because what it has is an http response: there is
      * no reason to write a module to disk twice on the way in.
      */
-    suspend fun install(context: Context, bytes: ByteArray): AdbModule = withContext(Dispatchers.IO) {
-        ByteArrayInputStream(bytes).use { ModulePackage.install(modulesRoot(context), it) }
-    }
+    suspend fun install(context: Context, bytes: ByteArray, source: String? = null): AdbModule =
+        withContext(Dispatchers.IO) {
+            ByteArrayInputStream(bytes).use { ModulePackage.install(modulesRoot(context), it) }
+                // Where it came from, when the caller knows: the catalogue is the caller that does,
+                // and this is what lets it show a repository as already installed afterwards.
+                .also { module -> source?.let { ModuleSettings.setSource(module.id, it) } }
+        }
 
     /**
      * The URL a module points at for its own updates, or null when it has none.

@@ -444,7 +444,7 @@
     <string name="modules_catalog_install">Install</string>
     <string name="modules_catalog_installing">Installing</string>
     <string name="modules_catalog_no_releases">This repository has no releases.</string>
-    <string name="modules_catalog_installed">Installed from here</string>
+    <string name="modules_catalog_installed">Installed</string>
     <string name="modules_card_line">Version: %1$s - %2$s</string>
     <string name="modules_card_version">Version: %1$s</string>
     <string name="modules_card_author">Author: %1$s</string>

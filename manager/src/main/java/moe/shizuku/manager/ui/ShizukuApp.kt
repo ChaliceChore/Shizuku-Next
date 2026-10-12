@@ -324,7 +324,9 @@ fun ShizukuApp() {
 
                             Detail.MORE_APPS -> CatalogScreen(
                                 kind = CatalogKind.APPS,
-                                installedIds = emptySet(),
+                                // The apps list is not modules, so nothing here can be
+                                // already installed as one.
+                                installedKeys = emptySet(),
                                 onBack = { detail = null },
                                 onInstalled = {}
                             )
