@@ -1,5 +1,6 @@
 package moe.shizuku.manager.ui.screen
 
+import android.os.Build
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Column
@@ -78,6 +79,22 @@ fun ModuleWebUiScreen(module: AdbModule, onBack: () -> Unit) {
                     settings.blockNetworkLoads = true
                     settings.allowFileAccess = true
                     settings.allowContentAccess = false
+
+                    // A page that ships its own data has to be able to read it: without this a
+                    // fetch() of a file sitting next to index.html is refused, and that looks like
+                    // the module being broken rather than like a setting of ours.
+                    settings.allowFileAccessFromFileURLs = true
+
+                    // Pages that keep a little state expect to find it where they left it.
+                    settings.domStorageEnabled = true
+
+                    // The app is dark and a module's page often is not, and the page that cannot
+                    // reach its own stylesheet - the internet is off, which is the point - is
+                    // exactly the plainest one. Letting the platform darken a light page keeps it
+                    // from glaring when everything around it is dark.
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        settings.isAlgorithmicDarkeningAllowed = true
+                    }
 
                     webViewClient = WebViewClient()
 

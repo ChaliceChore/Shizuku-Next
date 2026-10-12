@@ -34,7 +34,20 @@ object AdbModuleManager {
     /** Where a service's output is read to, for as long as it runs. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    fun modulesRoot(context: Context): File = File(context.filesDir, ROOT_DIR)
+    /**
+     * Where modules live.
+     *
+     * Not the app's private storage, which is the obvious place and does not work: a module's
+     * scripts are run through Shizuku, which runs them as shell, and shell cannot enter an app's own
+     * directory - the first `cd` into a module would fail with a permission error and the module
+     * would look broken for no visible reason. The external files directory is the one place both
+     * halves can reach: this app writes it as its owner, and the shell has it as well.
+     *
+     * The fallback is the private directory for a device that has no external storage at all, where
+     * a module can be installed and read but its scripts cannot run.
+     */
+    fun modulesRoot(context: Context): File =
+        File(context.getExternalFilesDir(null) ?: context.filesDir, ROOT_DIR)
 
     suspend fun list(context: Context): List<AdbModule> =
         withContext(Dispatchers.IO) { installedModules(modulesRoot(context)) }
