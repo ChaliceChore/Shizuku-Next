@@ -246,12 +246,11 @@ fun LabsScreen(bottomPadding: Dp, onOpenDetail: (Detail) -> Unit) {
                         label = label,
                         active = entry.detail in active,
                         onClick = {
-                            // The module index is somebody else's website, so it goes to the
-                            // browser when there is one, and the screen inside the app is only
-                            // for the device that has no browser to open it in.
-                            if (entry.detail != Detail.MORE_APPS || !MoreApps.openInBrowser(context)) {
-                                onOpenDetail(entry.detail)
-                            }
+                            // The index used to be somebody else's website and went to the
+                            // browser; it is a list now, with the search, the sort and the
+                            // filters that a list of over a thousand repositories needs, so it
+                            // opens here whether or not there is a browser to hand.
+                            onOpenDetail(entry.detail)
                         }
                     )
                 }
