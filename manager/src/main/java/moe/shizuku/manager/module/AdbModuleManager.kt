@@ -29,6 +29,9 @@ object AdbModuleManager {
     private const val TAG = "AdbModuleManager"
     private const val ROOT_DIR = "adb_modules"
 
+    /** The file in a module whose contents are the URL of its update manifest. */
+    private const val UPDATE_MANIFEST = "update.json"
+
     /** The services started and not yet stopped, so a user cannot start the same one twice. */
     private val services = ConcurrentHashMap<String, Process>()
 
@@ -75,6 +78,31 @@ object AdbModuleManager {
     suspend fun install(context: Context, bytes: ByteArray): AdbModule = withContext(Dispatchers.IO) {
         ByteArrayInputStream(bytes).use { ModulePackage.install(modulesRoot(context), it) }
     }
+
+    /**
+     * The URL a module points at for its own updates, or null when it has none.
+     *
+     * The format has a module ship an `update.json` whose contents are a URL, rather than a version
+     * in the module itself: the manifest can then say anything it likes - a changelog, a zip on
+     * another host - without the module being reinstalled to change it.
+     */
+    fun updateUrl(module: AdbModule): String? =
+        File(module.directory, UPDATE_MANIFEST)
+            .takeIf { it.isFile }
+            .let { file -> file?.let { runCatching { it.readText().trim() }.getOrNull() } }
+            ?.takeIf { it.startsWith("http") }
+
+    /**
+     * What a newer version of [module] would be, or null when there is none.
+     *
+     * Nothing is cached and nothing is assumed: a module with no `update.json`, one whose URL does
+     * not answer, and one that already is the newest all come back as no update, and only a
+     * manifest naming a higher version code with a zip to install comes back as one.
+     */
+    suspend fun checkUpdate(module: AdbModule): ModuleUpdate? =
+        updateUrl(module)
+            ?.let { ModuleCatalog.updateManifest(it) }
+            ?.takeIf { it.isNewerThan(module) }
 
     /** Switches a module on or off, which is the one marker file the format uses. */
     fun setEnabled(module: AdbModule, enabled: Boolean): Boolean = runCatching {

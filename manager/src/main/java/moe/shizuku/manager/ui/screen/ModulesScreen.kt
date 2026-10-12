@@ -35,6 +35,7 @@ import androidx.compose.material.icons.automirrored.outlined.Wysiwyg
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Search
@@ -84,10 +85,12 @@ import moe.shizuku.manager.module.AdbModule
 import moe.shizuku.manager.module.AdbModuleManager
 import moe.shizuku.manager.module.ModuleAccessMode
 import moe.shizuku.manager.module.ModuleActionResult
+import moe.shizuku.manager.module.ModuleCatalog
 import moe.shizuku.manager.module.ModuleCommandRequest
 import moe.shizuku.manager.module.ModuleInstallException
 import moe.shizuku.manager.module.ModuleInstallProblem
 import moe.shizuku.manager.module.ModuleSettings
+import moe.shizuku.manager.module.ModuleUpdate
 import moe.shizuku.manager.ui.component.PillButton
 import moe.shizuku.manager.ui.component.PillButtonQuiet
 
@@ -112,6 +115,7 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     val scope = rememberCoroutineScope()
 
     var modules by remember { mutableStateOf<List<AdbModule>>(emptyList()) }
+    var updates by remember { mutableStateOf<Map<String, ModuleUpdate>>(emptyMap()) }
     var query by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var webUiFor by remember { mutableStateOf<AdbModule?>(null) }
@@ -154,6 +158,14 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     }
 
     LaunchedEffect(Unit) { reload() }
+
+    // Their update check, asked once per module that points at a manifest: nothing polls, and a
+    // module that has no update to offer costs one file read.
+    LaunchedEffect(modules) {
+        updates = modules.mapNotNull { module ->
+            AdbModuleManager.checkUpdate(module)?.let { module.id to it }
+        }.toMap()
+    }
 
     /** What the list shows, which is all of them until something is typed. */
     val shown = remember(modules, query) {
@@ -284,6 +296,7 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                             module = module,
                             expanded = module.id in expanded,
                             serviceRunning = module.id in running,
+                            update = updates[module.id],
                             onExpandToggle = {
                                 expanded = if (module.id in expanded) {
                                     expanded - module.id
@@ -324,6 +337,19 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                                 }
                             },
                             onOpenWebUi = { webUiFor = module },
+                            onUpdate = { manifest ->
+                                scope.launch {
+                                    busy = true
+                                    runCatching {
+                                        AdbModuleManager.install(
+                                            context,
+                                            ModuleCatalog.download(manifest.zipUrl)
+                                        )
+                                    }.onFailure { errorRes = R.string.modules_error_install_failed }
+                                    busy = false
+                                    reload()
+                                }
+                            },
                             onDelete = { pendingDelete = module }
                         )
                     }
@@ -534,11 +560,13 @@ private fun ModuleCard(
     module: AdbModule,
     expanded: Boolean,
     serviceRunning: Boolean,
+    update: ModuleUpdate?,
     onExpandToggle: () -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     onRunAction: () -> Unit,
     onToggleService: () -> Unit,
     onOpenWebUi: () -> Unit,
+    onUpdate: (ModuleUpdate) -> Unit,
     onDelete: () -> Unit,
 ) {
     var bitmap by remember(module.banner) { mutableStateOf<ImageBitmap?>(null) }
@@ -652,6 +680,16 @@ private fun ModuleCard(
                             )
                         )
                     }
+
+                    // Their chip for it, in their colour: an update waiting is the one thing on a
+                    // card that is worth noticing without opening it.
+                    update?.let {
+                        ModuleChip(
+                            text = stringResource(R.string.module_update_available),
+                            container = MaterialTheme.colorScheme.tertiaryContainer,
+                            content = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(2.dp))
@@ -707,6 +745,18 @@ private fun ModuleCard(
                         }
 
                         Spacer(modifier = Modifier.weight(1f, true))
+
+                        // A waiting update sits to the right of the row, before the destructive
+                        // button, the way theirs does.
+                        update?.let { manifest ->
+                            ModuleCompactButton(
+                                icon = Icons.Outlined.Download,
+                                label = stringResource(R.string.modules_update),
+                                showLabel = !module.hasAction && !module.hasWebUi && !module.hasService,
+                                onClick = { onUpdate(manifest) }
+                            )
+                            Spacer(modifier = Modifier.weight(0.1f, true))
+                        }
 
                         ModuleCompactButton(
                             icon = Icons.Outlined.Delete,

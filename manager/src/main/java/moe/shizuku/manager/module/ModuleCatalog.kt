@@ -122,6 +122,17 @@ object ModuleCatalog {
             json.decodeFromString(get("https://api.github.com/repos/$repoFullName/releases"))
         }
 
+    /**
+     * The manifest a module's `update.json` points at.
+     *
+     * Null for anything that is not one: a module whose update URL answers with an error, or with
+     * something that is not an update, simply has no update to offer.
+     */
+    suspend fun updateManifest(url: String): ModuleUpdate? =
+        withContext(Dispatchers.IO) {
+            runCatching { json.decodeFromString<ModuleUpdate>(get(url)) }.getOrNull()
+        }
+
     /** The bytes of an asset. A module is a few hundred kilobytes at most, so it is held whole. */
     suspend fun download(url: String): ByteArray =
         withContext(Dispatchers.IO) {
