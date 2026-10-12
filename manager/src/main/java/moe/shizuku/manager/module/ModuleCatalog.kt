@@ -1,5 +1,6 @@
 package moe.shizuku.manager.module
 
+import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,6 +38,8 @@ data class ModuleRepo(
         val tag: String = "",
         val name: String = "",
         @SerialName("published_at") val publishedAt: String = "",
+        /** The apk of that release, when it has one: what an app is installed from. */
+        @SerialName("apk_url") val apkUrl: String = "",
     )
 
     /** The half of a `owner/name` a list shows, the owner being the less interesting one. */
@@ -147,6 +150,26 @@ object ModuleCatalog {
     suspend fun updateManifest(url: String): ModuleUpdate? =
         withContext(Dispatchers.IO) {
             runCatching { json.decodeFromString<ModuleUpdate>(get(url)) }.getOrNull()
+        }
+
+    /**
+     * Writes [url] to [file], a piece at a time rather than holding it.
+     *
+     * [download] is for a module, which is a few hundred kilobytes and can be held whole; an app's
+     * release is tens of megabytes, so it goes through to the file as it arrives.
+     */
+    suspend fun downloadTo(url: String, file: File): File =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder().url(url).header("User-Agent", USER_AGENT).build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw ModuleCatalogException(httpMessage(response.code))
+
+                val body = response.body ?: throw ModuleCatalogException("The download came back empty.")
+                file.outputStream().use { out -> body.byteStream().copyTo(out) }
+            }
+
+            file
         }
 
     /** The bytes of an asset. A module is a few hundred kilobytes at most, so it is held whole. */

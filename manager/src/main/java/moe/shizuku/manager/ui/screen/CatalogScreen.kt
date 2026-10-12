@@ -18,11 +18,14 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -33,8 +36,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -54,15 +59,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.R
-import moe.shizuku.manager.module.AdbModuleManager
+import moe.shizuku.manager.install.AppInstall
 import moe.shizuku.manager.module.ModuleCatalog
 import moe.shizuku.manager.module.ModuleRepo
-import moe.shizuku.manager.module.Release
 import moe.shizuku.manager.ui.component.PillButton
 import moe.shizuku.manager.ui.component.PillButtonQuiet
 import moe.shizuku.manager.utils.CustomTabsHelper
@@ -138,6 +143,7 @@ private fun isoMillis(timestamp: String): Long? {
  */
 @Composable
 private fun <T> CatalogFilter(
+    label: String,
     text: @Composable (T) -> String,
     options: List<T>,
     selected: T,
@@ -147,8 +153,10 @@ private fun <T> CatalogFilter(
 
     Box {
         FilledTonalButton(onClick = { open = true }) {
+            // The name of the control rather than the value in force: three of these sit in a row,
+            // and three answers spelled out do not fit. What each is set to is in its menu.
             Text(
-                text = text(selected),
+                text = label,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -209,10 +217,10 @@ fun CatalogScreen(
     var category by remember { mutableStateOf<String?>(null) }
     var updatedWithin by remember { mutableStateOf(UpdatedWithin.ANY) }
 
+    var searching by remember { mutableStateOf(false) }
     var openRepo by remember { mutableStateOf<String?>(null) }
-    var latest by remember { mutableStateOf<Map<String, Release?>>(emptyMap()) }
-    var loadingLatest by remember { mutableStateOf<String?>(null) }
     var installing by remember { mutableStateOf<String?>(null) }
+    var installOutcome by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(kind) {
         runCatching {
@@ -253,15 +261,79 @@ fun CatalogScreen(
         }.sortedWith(sort.order)
     }
 
+    /**
+     * Installs the newest apk of [repo], from the release the index carries.
+     *
+     * It is downloaded to the cache first because the installer hands the shell a path rather than
+     * a stream, and a package is tens of megabytes: it goes to a file as it arrives rather than
+     * being held whole on the way.
+     */
+    fun installApk(repo: ModuleRepo, url: String) {
+        installing = repo.fullName
+
+        scope.launch {
+            val outcome = runCatching {
+                val file = ModuleCatalog.downloadTo(
+                    url,
+                    File(context.cacheDir, url.substringAfterLast('/').ifBlank { "${repo.name}.apk" })
+                )
+
+                AppInstall.install(file.absolutePath, AppInstall.Options())
+            }.getOrElse {
+                AppInstall.Outcome.Failed(it.message ?: context.getString(R.string.catalog_install_failed))
+            }
+
+            // What the install said, in its own words: a package the platform refused says why,
+            // and that is the whole of what the person needs to know.
+            installOutcome = when (outcome) {
+                is AppInstall.Outcome.Done -> context.getString(R.string.catalog_apk_installed, repo.name)
+                is AppInstall.Outcome.Failed -> outcome.message
+            }
+            installing = null
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
-                Text(stringResource(R.string.catalog_apps_title))
+                // The search the module screens have: the title itself becomes the field when the
+                // magnifier is pressed, rather than a field sitting in the list under it.
+                if (searching) {
+                    TextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(stringResource(R.string.catalog_search)) },
+                        singleLine = true,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent
+                        )
+                    )
+                } else {
+                    Text(stringResource(R.string.catalog_apps_title))
+                }
             },
             windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                }
+            },
+            actions = {
+                if (searching) {
+                    IconButton(onClick = { searching = false; query = "" }) {
+                        Icon(Icons.Filled.Close, contentDescription = null)
+                    }
+                } else {
+                    IconButton(onClick = { searching = true }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = stringResource(R.string.catalog_search)
+                        )
+                    }
                 }
             }
         )
@@ -275,24 +347,13 @@ fun CatalogScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(R.string.catalog_search)) },
-                    singleLine = true
-                )
-            }
-
-            item {
-                // The site's three controls in its own words: the order, the category, and how
-                // recently updated. One row, because between them they say the current answer.
+                // The site's three controls, one row: what each is set to is inside its menu, so
+                // the buttons carry the name of the control and nothing else.
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item {
                         CatalogFilter(
-                            text = {
-                                stringResource(R.string.catalog_filter_sort, stringResource(it.label))
-                            },
+                            label = stringResource(R.string.catalog_filter_sort),
+                            text = { stringResource(it.label) },
                             options = CatalogSort.entries,
                             selected = sort,
                             onSelect = { sort = it }
@@ -301,6 +362,7 @@ fun CatalogScreen(
 
                     item {
                         CatalogFilter(
+                            label = stringResource(R.string.catalog_filter_category),
                             text = { it ?: stringResource(R.string.catalog_filter_all_categories) },
                             options = listOf(null) + categories,
                             selected = category,
@@ -310,12 +372,8 @@ fun CatalogScreen(
 
                     item {
                         CatalogFilter(
-                            text = {
-                                stringResource(
-                                    R.string.catalog_filter_updated,
-                                    stringResource(it.label)
-                                )
-                            },
+                            label = stringResource(R.string.catalog_filter_updated),
+                            text = { stringResource(it.label) },
                             options = UpdatedWithin.entries,
                             selected = updatedWithin,
                             onSelect = { updatedWithin = it }
@@ -342,21 +400,7 @@ fun CatalogScreen(
                         .fillMaxWidth()
                         .clip(MaterialTheme.shapes.large),
                     onClick = {
-                        if (openRepo == repo.fullName) {
-                            openRepo = null
-                            return@Card
-                        }
-
-                        openRepo = repo.fullName
-
-                        if (latest.containsKey(repo.fullName)) return@Card
-                        loadingLatest = repo.fullName
-                        scope.launch {
-                            val release = runCatching { ModuleCatalog.latestRelease(repo.fullName) }
-                                .getOrNull()
-                            latest = latest + (repo.fullName to release)
-                            loadingLatest = null
-                        }
+                        openRepo = if (openRepo == repo.fullName) null else repo.fullName
                     }
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
@@ -423,39 +467,27 @@ fun CatalogScreen(
                         }
 
                         if (openRepo == repo.fullName) {
-                            if (loadingLatest == repo.fullName) {
-                                LinearWavyProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(top = 12.dp)
-                                )
-                            }
+                            // The newest release comes from the index this list is, which is where
+                            // the site reads it too: no second request per card is needed to learn
+                            // what a repository's latest build is, and what it is installed from is
+                            // the apk of that release rather than a module's zip.
+                            val release = repo.release
+                            val apkUrl = release?.apkUrl?.takeIf { it.isNotBlank() }
 
-                            val release = latest[repo.fullName]
-                            val zip = release?.moduleZip
-
-                            // Only the newest release is shown, the way the community's own site
-                            // shows it: what a repository is now, rather than everything it has
-                            // ever been.
                             Text(
-                                text = release?.let {
-                                    stringResource(
-                                        R.string.catalog_latest_release,
-                                        it.label.ifEmpty { stringResource(R.string.catalog_no_release) }
-                                    )
-                                } ?: stringResource(
-                                    if (loadingLatest == repo.fullName) {
-                                        R.string.catalog_loading_release
-                                    } else {
-                                        R.string.catalog_no_release
-                                    }
+                                text = stringResource(
+                                    R.string.catalog_latest_release,
+                                    release?.let { it.tag.ifEmpty { it.name } }
+                                        ?.ifEmpty { stringResource(R.string.catalog_no_release) }
+                                        ?: stringResource(R.string.catalog_no_release)
                                 ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 modifier = Modifier.padding(top = 12.dp)
                             )
 
                             Text(
-                                text = zip?.name ?: stringResource(R.string.modules_catalog_no_zip),
+                                text = apkUrl?.substringAfterLast('/')
+                                    ?: stringResource(R.string.catalog_no_apk),
                                 style = MaterialTheme.typography.bodySmall
                             )
 
@@ -465,24 +497,10 @@ fun CatalogScreen(
                                     .padding(top = 12.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                if (zip != null) {
+                                if (apkUrl != null) {
                                     PillButton(
-                                        onClick = {
-                                            installing = repo.fullName
-                                            scope.launch {
-                                                runCatching {
-                                                    AdbModuleManager.install(
-                                                        context,
-                                                        ModuleCatalog.download(zip.url)
-                                                    )
-                                                }
-                                                    .onSuccess {
-                                                        onInstalled()
-                                                    }
-                                                    .onFailure { error = it.message }
-                                                installing = null
-                                            }
-                                        }
+                                        enabled = installing != repo.fullName,
+                                        onClick = { installApk(repo, apkUrl) }
                                     ) {
                                         Icon(
                                             imageVector = Icons.Filled.Download,
@@ -517,18 +535,24 @@ fun CatalogScreen(
                                 }
                             }
 
-                            if (repo.fullName in installedIds) {
-                                Text(
-                                    text = stringResource(R.string.modules_catalog_installed),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    modifier = Modifier.padding(top = 10.dp)
-                                )
-                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    installOutcome?.let { message ->
+        AlertDialog(
+            onDismissRequest = { installOutcome = null },
+            title = { Text(stringResource(R.string.catalog_apps_title)) },
+            text = { Text(message) },
+            confirmButton = {
+                PillButton(onClick = { installOutcome = null }) {
+                    Text(stringResource(android.R.string.ok))
+                }
+            }
+        )
     }
 }
 

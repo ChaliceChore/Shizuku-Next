@@ -408,8 +408,9 @@
     <string name="modules_catalog">Find modules</string>
     <string name="catalog_apps_title">More apps</string>
     <string name="catalog_search">Search apps, topics, languages\u2026</string>
-    <string name="catalog_filter_sort">Sort: %1$s</string>
-    <string name="catalog_filter_updated">Updated: %1$s</string>
+    <string name="catalog_filter_sort">Sort</string>
+    <string name="catalog_filter_category">Category</string>
+    <string name="catalog_filter_updated">Updated</string>
     <string name="catalog_filter_all_categories">All categories</string>
     <string name="catalog_updated_any">Any time</string>
     <string name="catalog_updated_last_7">Last 7 days</string>
@@ -421,8 +422,10 @@
     <string name="catalog_sort_released">Latest release</string>
     <string name="catalog_sort_added">Newest added</string>
     <string name="catalog_latest_release">Latest release: %1$s</string>
-    <string name="catalog_loading_release">Looking for the latest release...</string>
     <string name="catalog_no_release">No releases</string>
+    <string name="catalog_no_apk">No APK in this release</string>
+    <string name="catalog_apk_installed">%1$s installed</string>
+    <string name="catalog_install_failed">The install could not be started.</string>
     <string name="catalog_view_github">View on GitHub</string>
     <string name="modules_repo_retry">Retry</string>
     <string name="modules_repo_error">Could not load the repositories.</string>
@@ -440,7 +443,6 @@
     <string name="modules_allow_background_summary_short">A service script running unwatched</string>
     <string name="modules_catalog_install">Install</string>
     <string name="modules_catalog_installing">Installing</string>
-    <string name="modules_catalog_no_zip">No module zip in this release</string>
     <string name="modules_catalog_no_releases">This repository has no releases.</string>
     <string name="modules_catalog_installed">Installed from here</string>
     <string name="modules_card_line">Version: %1$s - %2$s</string>
