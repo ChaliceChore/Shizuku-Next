@@ -30,7 +30,6 @@ import moe.shizuku.manager.module.ModuleCommandRequest
 import moe.shizuku.manager.module.ModuleJsBridge
 import moe.shizuku.manager.module.ModuleProp
 import moe.shizuku.manager.module.ModuleSettings
-import moe.shizuku.manager.ui.component.swipeBackToModules
 
 /**
  * A module's own page, running inside this app.
@@ -76,10 +75,6 @@ fun ModuleWebUiScreen(module: AdbModule, onBack: () -> Unit) {
                 .weight(1f),
             factory = { context ->
                 WebView(context).apply {
-                    // A right swipe on the page is its back arrow. Compose cannot see the touches
-                    // that land on an Android view, so the page reads its own stream for it.
-                    swipeBackToModules(onBack)
-
                     settings.javaScriptEnabled = true
                     settings.blockNetworkLoads = true
                     settings.allowFileAccess = true
