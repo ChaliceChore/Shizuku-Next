@@ -439,6 +439,8 @@
     <string name="modules_summary">Add features to Shizuku with modules from the community</string>
     <string name="modules_warning">A module is somebody else\'s shell script, and it runs through Shizuku with the same access Shizuku has. Install only what you trust, and read the commands it asks to run.</string>
     <string name="modules_none">No modules installed yet.</string>
+    <string name="modules_search">Search modules</string>
+    <string name="modules_no_match">No module matches that.</string>
     <string name="modules_install">Install a module</string>
     <string name="modules_installed">%1$s installed</string>
     <string name="modules_access_full">Full access</string>

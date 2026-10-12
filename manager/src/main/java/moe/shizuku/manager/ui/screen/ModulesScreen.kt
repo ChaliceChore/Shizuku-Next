@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Tune
@@ -49,6 +50,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -110,6 +112,7 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     val scope = rememberCoroutineScope()
 
     var modules by remember { mutableStateOf<List<AdbModule>>(emptyList()) }
+    var query by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var webUiFor by remember { mutableStateOf<AdbModule?>(null) }
     var catalogOpen by remember { mutableStateOf(false) }
@@ -151,6 +154,19 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     }
 
     LaunchedEffect(Unit) { reload() }
+
+    /** What the list shows, which is all of them until something is typed. */
+    val shown = remember(modules, query) {
+        if (query.isBlank()) {
+            modules
+        } else {
+            modules.filter { module ->
+                module.name.contains(query, ignoreCase = true) ||
+                    module.id.contains(query, ignoreCase = true) ||
+                    module.prop.description?.contains(query, ignoreCase = true) == true
+            }
+        }
+    }
 
     // Both of these take the screen rather than opening over it: a page and a list are not dialogs.
     webUiFor?.let { module ->
@@ -200,6 +216,15 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                 title = { Text(stringResource(R.string.tools_modules)) },
                 windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 actions = {
+                    // Their modules screen is where repositories are found from, not the
+                    // other way round: the catalog belongs to the modules section, and this
+                    // is the second way in - the floating button's dialog is the first.
+                    IconButton(onClick = { catalogOpen = true }) {
+                        Icon(
+                            imageVector = Icons.Filled.Cloud,
+                            contentDescription = stringResource(R.string.modules_find_modules)
+                        )
+                    }
                     IconButton(onClick = { tuneDialog = true }) {
                         Icon(
                             imageVector = Icons.Outlined.Tune,
@@ -222,17 +247,38 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (modules.isEmpty()) {
+                // Their search, over the module list: a module whose page has a name nobody
+                // remembers is found by the thing its author called it.
+                item {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { query = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.modules_search)) },
+                        singleLine = true,
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Search, contentDescription = null)
+                        }
+                    )
+                }
+
+                if (shown.isEmpty()) {
                     item {
                         Text(
-                            text = stringResource(R.string.modules_none),
+                            text = stringResource(
+                                if (query.isBlank()) {
+                                    R.string.modules_none
+                                } else {
+                                    R.string.modules_no_match
+                                }
+                            ),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                modules.forEach { module ->
+                shown.forEach { module ->
                     item {
                         ModuleCard(
                             module = module,
