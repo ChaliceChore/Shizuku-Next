@@ -52,7 +52,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -486,14 +486,17 @@ fun ModulesScreen(
             }
         }
 
-        ExtendedFloatingActionButton(
+        FloatingActionButton(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
-            onClick = { installDialog = true },
-            icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            text = { Text(stringResource(R.string.modules_install)) }
-        )
+            onClick = { installDialog = true }
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = stringResource(R.string.modules_install)
+            )
+        }
     }
 
     if (installDialog) {
