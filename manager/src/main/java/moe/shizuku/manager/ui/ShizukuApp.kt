@@ -103,6 +103,7 @@ import moe.shizuku.manager.ui.screen.MoreAppsScreen
 import moe.shizuku.manager.ui.screen.PermissionsScreen
 import moe.shizuku.manager.ui.screen.SettingsScreen
 import moe.shizuku.manager.ui.screen.ShellScreen
+import moe.shizuku.manager.ui.screen.ModulesScreen
 import moe.shizuku.manager.ui.screen.StealthScreen
 import moe.shizuku.manager.ui.screen.TerminalScreen
 import moe.shizuku.manager.ui.screen.WifiPasswordsScreen
@@ -148,6 +149,9 @@ enum class Detail(
     TERMINAL,
     INTENTS,
     PERMISSIONS,
+
+    /** ADB modules: other people's shell scripts, installed and run through Shizuku. */
+    MODULES,
 
     /** The community's module index, shown here only when there was no browser to open it in. */
     MORE_APPS
@@ -319,6 +323,7 @@ fun ShizukuApp() {
 
                             Detail.MORE_APPS -> MoreAppsScreen(onBack = { detail = null })
 
+                            Detail.MODULES -> ModulesScreen(onBack = { detail = null })
                             Detail.STEALTH -> StealthScreen(onBack = { detail = null })
                             Detail.TERMINAL -> TerminalScreen(onBack = { detail = null })
                             Detail.INTENTS -> IntentsScreen(onBack = { detail = null })

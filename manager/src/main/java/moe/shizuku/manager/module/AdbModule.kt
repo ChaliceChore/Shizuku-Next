@@ -71,6 +71,30 @@ data class AdbModule(
 }
 
 /**
+ * What running a module's script produced.
+ *
+ * Both streams are kept, and the exit code with them: the output is what the user is shown and what
+ * is written to the module's log, and a module that failed and said nothing is still a module that
+ * failed. "No output" is written out rather than left empty so that an empty log is a fact about the
+ * script rather than a log that was never written.
+ */
+data class ModuleActionResult(
+    val exitCode: Int,
+    val stdout: String,
+    val stderr: String,
+) {
+    val combinedOutput: String
+        get() = buildString {
+            if (stdout.isNotBlank()) append(stdout.trim())
+            if (stderr.isNotBlank()) {
+                if (isNotEmpty()) append("\n\n")
+                append(stderr.trim())
+            }
+            if (isBlank()) append("No output.")
+        }
+}
+
+/**
  * Every module installed under [root], in name order.
  *
  * A directory without a readable `module.prop` is not a module and is skipped: that is what the
