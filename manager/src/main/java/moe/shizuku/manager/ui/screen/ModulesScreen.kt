@@ -132,6 +132,12 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     var sortDialog by remember { mutableStateOf(false) }
     var sort by remember { mutableStateOf(ModuleSort.load()) }
     var busy by remember { mutableStateOf(false) }
+    // A module's state is read off disk rather than stored, and two reads of the same module are
+    // equal objects - so a list that was re-read for real, after switching a module off or marking
+    // it removed, looks unchanged to Compose and nothing re-reads those flags. This counts the
+    // reads instead: it is part of what the list is computed from, so it is what makes the cards
+    // re-read the state they actually have.
+    var reads by remember { mutableStateOf(0) }
     var webUiFor by remember { mutableStateOf<AdbModule?>(null) }
     var actionFor by remember { mutableStateOf<AdbModule?>(null) }
     var catalogOpen by remember { mutableStateOf(false) }
@@ -161,6 +167,7 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     suspend fun refreshNow() {
         val listed = AdbModuleManager.list(context)
         modules = listed
+        reads++
         running = listed.filter { AdbModuleManager.isServiceRunning(it) }.map { it.id }.toSet()
     }
 
@@ -196,7 +203,7 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
     }
 
     /** What the list shows, which is all of them until something is typed. */
-    val shown = remember(modules, query, sort) {
+    val shown = remember(modules, query, sort, reads) {
         if (query.isBlank()) {
             modules
         } else {

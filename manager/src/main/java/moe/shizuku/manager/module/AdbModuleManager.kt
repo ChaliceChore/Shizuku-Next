@@ -118,7 +118,10 @@ object AdbModuleManager {
             marker.exists() || marker.createNewFile()
             setEnabled(module, false)
         } else {
-            !marker.exists() || marker.delete()
+            // A restore is the opposite of the removal in both halves: the mark comes off and the
+            // module is switched back on, because leaving it off afterwards would make restoring
+            // something the user then has to finish by hand.
+            (!marker.exists() || marker.delete()) && setEnabled(module, true)
         }
     }.getOrDefault(false)
 
