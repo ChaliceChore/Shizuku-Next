@@ -95,5 +95,9 @@ class ModuleCommandTest {
         assertEquals(120, ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS)
         assertEquals(124, ModuleRunLimits.TIMEOUT_EXIT_CODE)
         assertEquals(64 * 1024, ModuleRunLimits.MAX_OUTPUT_BYTES)
+
+        // What a page may ask for with timeoutSeconds, and what it is clamped to.
+        assertEquals(1, ModuleRunLimits.MIN_WEB_UI_TIMEOUT_SECONDS)
+        assertEquals(600, ModuleRunLimits.MAX_WEB_UI_TIMEOUT_SECONDS)
     }
 }

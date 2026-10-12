@@ -30,7 +30,7 @@ data class ModuleCommandRequest(
  */
 class ModuleJsBridge(
     private val module: AdbModule,
-    private val runCommand: suspend (String) -> ModuleActionResult,
+    private val runCommand: suspend (String, Int) -> ModuleActionResult,
 ) {
 
     @JavascriptInterface
@@ -42,33 +42,31 @@ class ModuleJsBridge(
         )
 
     @JavascriptInterface
-    fun exec(command: String): String = runCommandJson(command)
+    fun exec(command: String): String = runCommandJson(command, ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS)
 
     /**
      * The same, with the options object the format defines.
      *
-     * Only a timeout is implemented. The others - stdin, a working directory and extra environment
-     * variables - would each be a way to make the command something other than what the user
-     * approved, and a bridge that quietly ignores an option is worse than one that says it cannot:
-     * a page asking for them gets a refusal naming the option.
+     * The timeout is honoured, clamped to the range the format documents; the others - stdin, a
+     * working directory and extra environment variables - would each be a way to make the command
+     * something other than what the user approved, and a bridge that quietly ignores an option is
+     * worse than one that says it cannot: a page asking for those gets a refusal naming the option,
+     * and so does one whose timeout is not a number.
      */
     @JavascriptInterface
-    fun execWithOptions(command: String, optionsJson: String?): String {
-        val unsupported = unsupportedOption(optionsJson)
-        if (unsupported != null) {
-            return ModuleWebUi.refusedJson("This bridge does not support the $unsupported option.")
+    fun execWithOptions(command: String, optionsJson: String?): String =
+        when (val options = ModuleWebUi.optionsFrom(optionsJson)) {
+            is ModuleWebUi.Options.Refused -> ModuleWebUi.refusedJson(options.reason)
+            is ModuleWebUi.Options.Supported -> runCommandJson(command, options.timeoutSeconds)
         }
 
-        return runCommandJson(command)
-    }
-
-    private fun runCommandJson(command: String): String {
+    private fun runCommandJson(command: String, timeoutSeconds: Int): String {
         val mode = ModuleSettings.getAccessMode()
         if (!ModuleWebUi.canUseShellBridge(module, mode)) {
             return ModuleWebUi.refusedJson("This module has no shell bridge.")
         }
 
-        val result = runBlocking { runCommand(command) }
+        val result = runBlocking { runCommand(command, timeoutSeconds) }
 
         return ModuleWebUi.execResultJson(result, result.exitCode == ModuleRunLimits.TIMEOUT_EXIT_CODE)
     }

@@ -65,4 +65,14 @@ object ModuleRunLimits {
     const val SCRIPT_TIMEOUT_SECONDS = 120
     const val TIMEOUT_EXIT_CODE = 124
     const val MAX_OUTPUT_BYTES = 64 * 1024
+
+    /**
+     * What a page may ask for with `timeoutSeconds`, and the range the format clamps it to.
+     *
+     * A page is the one place a module can ask for a shorter or longer clock than a script gets,
+     * so the range is the format's rather than this app's: less than a second is not a command and
+     * ten minutes is the longest anything is meant to take.
+     */
+    const val MIN_WEB_UI_TIMEOUT_SECONDS = 1
+    const val MAX_WEB_UI_TIMEOUT_SECONDS = 600
 }

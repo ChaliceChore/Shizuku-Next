@@ -119,8 +119,8 @@ fun ModuleWebUiScreen(module: AdbModule, active: Boolean = true, onBack: () -> U
                     }
 
                     addJavascriptInterface(
-                        ModuleJsBridge(module) { command ->
-                            AdbModuleManager.runWebUiCommand(module, command, approve)
+                        ModuleJsBridge(module) { command, timeoutSeconds ->
+                            AdbModuleManager.runWebUiCommand(module, command, approve, timeoutSeconds)
                         },
                         "Shizuku"
                     )

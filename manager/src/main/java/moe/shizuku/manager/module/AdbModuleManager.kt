@@ -247,6 +247,7 @@ object AdbModuleManager {
         module: AdbModule,
         command: String,
         approve: suspend (ModuleCommandRequest) -> Boolean,
+        timeoutSeconds: Int = ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS,
     ): ModuleActionResult {
         if (!ModuleWebUi.canUseShellBridge(module, ModuleSettings.getAccessMode())) {
             return ModuleActionResult(-1, "", "This module has no shell bridge.")
@@ -258,7 +259,7 @@ object AdbModuleManager {
             return ModuleActionResult(-1, "", "The command was not approved.")
         }
 
-        return runCommand(command)
+        return runCommand(command, timeoutSeconds = timeoutSeconds)
     }
 
     private suspend fun runScript(
@@ -307,6 +308,7 @@ object AdbModuleManager {
         command: String,
         onOutput: (String) -> Unit = {},
         moduleId: String? = null,
+        timeoutSeconds: Int = ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS,
     ): ModuleActionResult = withContext(Dispatchers.IO) {
         val process = newShellProcess(command)
             ?: return@withContext ModuleActionResult(-1, "", "Shizuku is not running.")
@@ -330,7 +332,7 @@ object AdbModuleManager {
                     launch { readCapped(process.errorStream, stderr, report) }
                 )
 
-                val exitCode = awaitExit(process, ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS * 1000L)
+                val exitCode = awaitExit(process, timeoutSeconds * 1000L)
                 if (exitCode == null) {
                     // Out of time: the process is killed and the reader coroutines end with their
                     // streams. The exit code is the one the format uses for this, so a module can

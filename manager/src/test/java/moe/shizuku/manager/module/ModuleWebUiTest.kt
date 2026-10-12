@@ -128,10 +128,75 @@ class ModuleWebUiTest {
         assertNull(unsupportedOption(null))
         assertNull(unsupportedOption(""))
         assertNull(unsupportedOption("{}"))
+        // The timeout is not one of them: it is the option this bridge does honour.
         assertNull(unsupportedOption("""{"timeoutSeconds":30}"""))
 
         assertEquals("stdin", unsupportedOption("""{"stdin":"hello\n"}"""))
         assertEquals("cwd", unsupportedOption("""{"cwd":"webui"}"""))
         assertEquals("env", unsupportedOption("""{"env":{"FOO":"bar"}}"""))
+    }
+
+    @Test
+    fun `a timeout is the script's when none was asked for`() {
+        assertEquals(
+            ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS,
+            timeoutOf(ModuleWebUi.optionsFrom(null))
+        )
+        assertEquals(
+            ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS,
+            timeoutOf(ModuleWebUi.optionsFrom(""))
+        )
+        assertEquals(
+            ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS,
+            timeoutOf(ModuleWebUi.optionsFrom("{}"))
+        )
+        // A page that sent options without a timeout is asking for nothing in particular, and so
+        // is one that sent a null where a number goes.
+        assertEquals(
+            ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS,
+            timeoutOf(ModuleWebUi.optionsFrom("""{"timeoutSeconds":null}"""))
+        )
+    }
+
+    @Test
+    fun `a timeoutSeconds is clamped to the range the format documents`() {
+        assertEquals(30, timeoutOf(ModuleWebUi.optionsFrom("""{"timeoutSeconds":30}""")))
+        assertEquals(1, timeoutOf(ModuleWebUi.optionsFrom("""{"timeoutSeconds":0}""")))
+        assertEquals(1, timeoutOf(ModuleWebUi.optionsFrom("""{"timeoutSeconds":-5}""")))
+
+        assertEquals(600, timeoutOf(ModuleWebUi.optionsFrom("""{"timeoutSeconds":600}""")))
+        assertEquals(600, timeoutOf(ModuleWebUi.optionsFrom("""{"timeoutSeconds":100000}""")))
+    }
+
+    @Test
+    fun `a timeout that is not a whole number is refused, not rounded`() {
+        val fraction = ModuleWebUi.optionsFrom("""{"timeoutSeconds":12.5}""")
+        assertTrue(fraction is ModuleWebUi.Options.Refused)
+        assertTrue(
+            (fraction as ModuleWebUi.Options.Refused).reason.contains("timeoutSeconds")
+        )
+
+        assertTrue(
+            ModuleWebUi.optionsFrom("""{"timeoutSeconds":"300"}""") is ModuleWebUi.Options.Refused
+        )
+        assertTrue(ModuleWebUi.optionsFrom("{not json") is ModuleWebUi.Options.Refused)
+    }
+
+    @Test
+    fun `an option this bridge will not honour is refused by name, timeout or not`() {
+        val refused = ModuleWebUi.optionsFrom("""{"timeoutSeconds":30,"stdin":"hello"}""")
+
+        assertTrue(refused is ModuleWebUi.Options.Refused)
+        assertEquals(
+            "This bridge does not support the stdin option.",
+            (refused as ModuleWebUi.Options.Refused).reason
+        )
+    }
+
+    /** The timeout a parsed options object means, failing loudly when it was refused. */
+    private fun timeoutOf(options: ModuleWebUi.Options): Int {
+        assertTrue("expected options to be honoured, not refused", options is ModuleWebUi.Options.Supported)
+
+        return (options as ModuleWebUi.Options.Supported).timeoutSeconds
     }
 }

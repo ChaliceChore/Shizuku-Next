@@ -1,6 +1,11 @@
 package moe.shizuku.manager.module
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.put
 
 /**
@@ -35,6 +40,58 @@ object ModuleWebUi {
         mode: ModuleAccessMode,
         backgroundAllowed: Boolean,
     ): Boolean = module.enabled && mode == ModuleAccessMode.FULL && backgroundAllowed
+
+    /**
+     * What an `execWithOptions` page asked for, as far as this bridge is concerned.
+     *
+     * The timeout is the one option the format documents that this bridge honours, and only when
+     * it is a whole number: a page that asks for a length of time and quietly gets another is the
+     * kind of silence this bridge refuses to do, so a `timeoutSeconds` that is not a number is
+     * named in a refusal instead of being rounded off. The rest of the options are refused by name
+     * for the same reason - see [unsupportedOption].
+     */
+    sealed interface Options {
+        /** How long the command is given, in seconds, already clamped to the format's range. */
+        data class Supported(val timeoutSeconds: Int) : Options
+
+        /** An option this bridge will not honour, and what to say about it. */
+        data class Refused(val reason: String) : Options
+    }
+
+    /**
+     * Reads an options object the way the format defines it.
+     *
+     * Nothing asked for means the script timeout, which is what `exec()` uses and what the format
+     * documents as the default. A `timeoutSeconds` is clamped to
+     * [ModuleRunLimits.MIN_WEB_UI_TIMEOUT_SECONDS]..[ModuleRunLimits.MAX_WEB_UI_TIMEOUT_SECONDS].
+     */
+    fun optionsFrom(optionsJson: String?): Options {
+        val json = optionsJson?.takeIf { it.isNotBlank() }
+            ?: return Options.Supported(ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS)
+
+        unsupportedOption(json)?.let { name ->
+            return Options.Refused("This bridge does not support the $name option.")
+        }
+
+        val element = runCatching { Json.parseToJsonElement(json) }.getOrNull()
+            ?: return Options.Refused("The options are not a JSON object this bridge can read.")
+
+        // A page that sent options but no timeout is asking for nothing in particular.
+        val requested = (element as? JsonObject)?.get("timeoutSeconds")
+        if (requested == null || requested is JsonNull) {
+            return Options.Supported(ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS)
+        }
+
+        val seconds = (requested as? JsonPrimitive)?.takeIf { !it.isString }?.intOrNull
+            ?: return Options.Refused("The timeoutSeconds option must be a whole number of seconds.")
+
+        return Options.Supported(
+            seconds.coerceIn(
+                ModuleRunLimits.MIN_WEB_UI_TIMEOUT_SECONDS,
+                ModuleRunLimits.MAX_WEB_UI_TIMEOUT_SECONDS
+            )
+        )
+    }
 
     /** What `window.Shizuku.getModuleInfo()` answers. */
     fun moduleInfoJson(module: AdbModule, mode: ModuleAccessMode, trusted: Boolean): String =
