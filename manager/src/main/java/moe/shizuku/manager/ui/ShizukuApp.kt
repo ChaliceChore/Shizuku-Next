@@ -34,15 +34,13 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AdminPanelSettings
-import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.AdminPanelSettings
-import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Badge
@@ -204,8 +202,10 @@ private class TabPill {
 
 private val tabs = listOf(
     Tab(R.string.tab_home, Icons.Filled.Home, Icons.Outlined.Home),
-    Tab(R.string.tab_apps, Icons.Filled.Apps, Icons.Outlined.Apps),
-    Tab(R.string.tab_modules, Icons.Filled.Extension, Icons.Outlined.Extension),
+    // The two icons their own app uses for these two screens: the panel for what an app is
+    // allowed to do, the stacked layers for the modules that add to it.
+    Tab(R.string.tab_apps, Icons.Filled.AdminPanelSettings, Icons.Outlined.AdminPanelSettings),
+    Tab(R.string.tab_modules, Icons.Filled.Layers, Icons.Outlined.Layers),
     // Labs holds the things that are gone to rather than lived in: the app-ops list and the
     // shell to begin with, and whatever else turns out to belong there. Each was a tab of its
     // own before, which is a lot of the bar for two screens that are mostly a list you read
