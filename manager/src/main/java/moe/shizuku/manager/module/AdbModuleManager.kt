@@ -5,6 +5,9 @@ import android.net.Uri
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
+import java.nio.ByteBuffer
+import java.nio.CharBuffer
+import java.nio.charset.CodingErrorAction
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +34,9 @@ object AdbModuleManager {
 
     /** The file in a module whose contents are the URL of its update manifest. */
     private const val UPDATE_MANIFEST = "update.json"
+
+    /** How much of a script's stream is read at a time, in bytes. */
+    private const val READ_BUFFER_BYTES = 8 * 1024
 
     /** The services started and not yet stopped, so a user cannot start the same one twice. */
     private val services = ConcurrentHashMap<String, Process>()
@@ -326,26 +332,70 @@ object AdbModuleManager {
      * [onChunk].
      *
      * A module that prints in a loop would otherwise fill the manager's heap with its log: the
-     * format gives a stream a cap, and this is where it is applied. What is reported is exactly
-     * what is kept, so a console and the log cannot come to hold different things.
+     * format gives a stream a cap, and this is where it is applied - counted in bytes, because
+     * that is the unit the format gives it. What is reported is exactly what is kept, so a console
+     * and the log cannot come to hold different things.
+     *
+     * The bytes are decoded through a [Charsets.UTF_8] decoder instead of `String(bytes, UTF_8)`,
+     * and that is the whole reason for the shape of this: one read can end in the middle of a
+     * character, and decoding each read on its own would turn both halves into replacement
+     * characters and show a script's perfectly good text as mojibake. The decoder is what holds
+     * the half over until the rest of it arrives. Bytes that never become a character - a script
+     * printing junk - are replaced rather than refused, which is what a stream of somebody else's
+     * output has always been read as here.
      */
-    private fun readCapped(
+    internal fun readCapped(
         stream: InputStream,
         sink: StringBuilder,
         onChunk: (String) -> Unit = {},
     ) {
         runCatching {
-            val buffer = ByteArray(8 * 1024)
+            val bytes = ByteBuffer.allocate(READ_BUFFER_BYTES)
+            val chars = CharBuffer.allocate(READ_BUFFER_BYTES)
+            val decoder = Charsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPLACE)
+                .onUnmappableCharacter(CodingErrorAction.REPLACE)
+
             var total = 0
 
             while (total < ModuleRunLimits.MAX_OUTPUT_BYTES) {
-                val read = stream.read(buffer)
+                // Only what is left of the cap is read, so the cap is the cap: a read never goes
+                // past it, and no byte that arrived is thrown away.
+                val room = minOf(bytes.remaining(), ModuleRunLimits.MAX_OUTPUT_BYTES - total)
+                if (room <= 0) break
+
+                val read = stream.read(bytes.array(), bytes.position(), room)
                 if (read <= 0) break
 
-                val room = ModuleRunLimits.MAX_OUTPUT_BYTES - total
-                val text = String(buffer, 0, minOf(read, room), Charsets.UTF_8)
-                sink.append(text)
                 total += read
+                bytes.position(bytes.position() + read)
+
+                // Decode everything that is whole and keep the tail: the bytes the decoder did not
+                // consume are a character that is not finished, and compact() moves them to the
+                // front of the buffer for the next read to complete.
+                bytes.flip()
+                chars.clear()
+                decoder.decode(bytes, chars, false)
+                bytes.compact()
+
+                chars.flip()
+                if (chars.hasRemaining()) {
+                    val text = chars.toString()
+                    sink.append(text)
+                    onChunk(text)
+                }
+            }
+
+            // What the decoder is still holding is a character the stream stopped in the middle of.
+            // It is reported as the replacement character it is rather than dropped silently.
+            bytes.flip()
+            chars.clear()
+            decoder.decode(bytes, chars, true)
+            decoder.flush(chars)
+            chars.flip()
+            if (chars.hasRemaining()) {
+                val text = chars.toString()
+                sink.append(text)
                 onChunk(text)
             }
         }
