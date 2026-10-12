@@ -387,6 +387,12 @@ private fun MainTabs(
     // takes back: shortly after launch, while nobody is touching anything, the two lists read
     // themselves, so the swipe is still cheap and the tab is already full when it is opened.
     var warmUp by remember { mutableStateOf(false) }
+
+    // Whether the module screen has one of its own full screens up - a module's page, its
+    // action console or the catalog. Those take the whole tab, and a horizontal swipe there
+    // belongs to what is on screen rather than to the app's tabs, so the pager stops dragging
+    // while one of them is up.
+    var modulesFullscreen by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         delay(1500)
         warmUp = true
@@ -416,6 +422,7 @@ private fun MainTabs(
         CenteredContent {
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = !(pagerState.currentPage == 2 && modulesFullscreen),
                 modifier = Modifier.fillMaxSize(),
                 // Every page stays composed. The pager otherwise builds a page only as it is
                 // dragged in, which is what the app lists were reading on; keeping them all
@@ -441,7 +448,10 @@ private fun MainTabs(
                         warmUp = warmUp,
                         onGrantedCount = { grantedCount = it }
                     )
-                    2 -> ModulesScreen(bottomPadding = bottomPadding)
+                    2 -> ModulesScreen(
+                        bottomPadding = bottomPadding,
+                        onFullscreenChange = { modulesFullscreen = it }
+                    )
                     3 -> LabsScreen(bottomPadding = bottomPadding, onOpenDetail = onOpenDetail)
                     4 -> SettingsScreen(bottomPadding = bottomPadding, onOpenDetail = onOpenDetail)
                 }

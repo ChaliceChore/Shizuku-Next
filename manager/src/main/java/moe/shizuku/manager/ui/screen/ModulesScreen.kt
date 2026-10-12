@@ -68,6 +68,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -120,7 +121,10 @@ import moe.shizuku.manager.ui.component.PillButtonQuiet
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ModulesScreen(bottomPadding: Dp = 0.dp) {
+fun ModulesScreen(
+    bottomPadding: Dp = 0.dp,
+    onFullscreenChange: (Boolean) -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -214,6 +218,13 @@ fun ModulesScreen(bottomPadding: Dp = 0.dp) {
             }
         }.sortedWith(sort.order())
     }
+
+    // A module's page, its action console and the catalog each take the whole tab. While one of
+    // them is up a horizontal swipe belongs to it, not to the app's tabs, so the tab pager is told
+    // to stop dragging - and told again when the screen is closed.
+    val fullscreen = webUiFor != null || actionFor != null || catalogOpen
+    LaunchedEffect(fullscreen) { onFullscreenChange(fullscreen) }
+    DisposableEffect(Unit) { onDispose { onFullscreenChange(false) } }
 
     // These take the screen rather than opening over the list: a page, a console and a catalog are
     // not dialogs.
