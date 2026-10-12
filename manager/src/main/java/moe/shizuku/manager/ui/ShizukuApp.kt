@@ -450,6 +450,7 @@ private fun MainTabs(
                     )
                     2 -> ModulesScreen(
                         bottomPadding = bottomPadding,
+                        active = active,
                         onFullscreenChange = { modulesFullscreen = it }
                     )
                     3 -> LabsScreen(bottomPadding = bottomPadding, onOpenDetail = onOpenDetail)

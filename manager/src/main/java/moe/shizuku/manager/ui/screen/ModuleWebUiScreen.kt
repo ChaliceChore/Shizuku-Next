@@ -3,6 +3,7 @@ package moe.shizuku.manager.ui.screen
 import android.os.Build
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,11 +42,13 @@ import moe.shizuku.manager.module.ModuleSettings
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ModuleWebUiScreen(module: AdbModule, onBack: () -> Unit) {
+fun ModuleWebUiScreen(module: AdbModule, active: Boolean = true, onBack: () -> Unit) {
     val webRoot = module.webRoot ?: return
 
     var pendingCommand by remember { mutableStateOf<ModuleCommandRequest?>(null) }
     var approval by remember { mutableStateOf<CompletableDeferred<Boolean>?>(null) }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    var canGoBack by remember { mutableStateOf(false) }
 
     val approve: suspend (ModuleCommandRequest) -> Boolean = { request ->
         if (ModuleSettings.isTrusted(request.module.id)) {
@@ -57,6 +60,11 @@ fun ModuleWebUiScreen(module: AdbModule, onBack: () -> Unit) {
             answer.await()
         }
     }
+
+    // Android's back, and the page's own history first: a page that has gone somewhere inside
+    // itself goes back a step, and only when there is nowhere left in it does back leave for the
+    // module list - which the module screen's own back handler does. Switched off with the tab.
+    BackHandler(enabled = active && canGoBack) { webView?.goBack() }
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
@@ -75,6 +83,8 @@ fun ModuleWebUiScreen(module: AdbModule, onBack: () -> Unit) {
                 .weight(1f),
             factory = { context ->
                 WebView(context).apply {
+                    webView = this
+
                     settings.javaScriptEnabled = true
                     settings.blockNetworkLoads = true
                     settings.allowFileAccess = true
@@ -96,7 +106,17 @@ fun ModuleWebUiScreen(module: AdbModule, onBack: () -> Unit) {
                         settings.isAlgorithmicDarkeningAllowed = true
                     }
 
-                    webViewClient = WebViewClient()
+                    // Where the page is in its own history, read as it goes: it is what decides
+                    // whether back steps inside the page or leaves it.
+                    webViewClient = object : WebViewClient() {
+                        override fun doUpdateVisitedHistory(
+                            view: WebView,
+                            url: String?,
+                            isReload: Boolean,
+                        ) {
+                            canGoBack = view.canGoBack()
+                        }
+                    }
 
                     addJavascriptInterface(
                         ModuleJsBridge(module) { command ->

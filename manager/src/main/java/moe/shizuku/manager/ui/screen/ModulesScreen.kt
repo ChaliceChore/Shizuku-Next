@@ -7,6 +7,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -121,6 +122,7 @@ import moe.shizuku.manager.ui.component.PillButtonQuiet
 @Composable
 fun ModulesScreen(
     bottomPadding: Dp = 0.dp,
+    active: Boolean = true,
     onFullscreenChange: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -223,10 +225,22 @@ fun ModulesScreen(
     LaunchedEffect(fullscreen) { onFullscreenChange(fullscreen) }
     DisposableEffect(Unit) { onDispose { onFullscreenChange(false) } }
 
+    // Android's own way back on the screens that take the whole tab: the system's back gesture and
+    // the back button close whichever one is up and land on the module list, which is exactly what
+    // its back arrow does. Enabled only while the modules tab is the one on screen, because a page
+    // left open behind another tab must not take that tab's back gesture.
+    BackHandler(enabled = active && fullscreen) {
+        when {
+            webUiFor != null -> webUiFor = null
+            actionFor != null -> actionFor = null
+            else -> catalogOpen = false
+        }
+    }
+
     // These take the screen rather than opening over the list: a page, a console and a catalog are
     // not dialogs.
     webUiFor?.let { module ->
-        ModuleWebUiScreen(module = module, onBack = { webUiFor = null })
+        ModuleWebUiScreen(module = module, active = active, onBack = { webUiFor = null })
         return
     }
 
