@@ -448,6 +448,7 @@
     <string name="modules_card_author">Author: %1$s</string>
     <string name="modules_card_id">ID: %1$s</string>
     <string name="modules_disabled">Disabled</string>
+    <string name="modules_error_set_enabled">The module could not be switched on or off: its directory is not writable.</string>
     <string name="module_update_available">Update available</string>
     <string name="modules_update">Update</string>
     <string name="modules_sort">Sort</string>

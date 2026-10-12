@@ -436,6 +436,12 @@ fun ModulesScreen(
                     item {
                         ModuleCard(
                             module = module,
+                            // Passed rather than read inside the card, and that is the whole of the
+                            // fix for a switch that flicked and snapped back: a module is a state
+                            // read off disk, so two reads of it are equal objects, and the card
+                            // that draws the switch could be reused as it was with the state it
+                            // had. A value in the parameters cannot be reused when it differs.
+                            enabled = module.enabled,
                             expanded = module.id in expanded,
                             serviceRunning = module.id in running,
                             update = updates[module.id],
@@ -447,7 +453,9 @@ fun ModulesScreen(
                                 }
                             },
                             onEnabledChange = { checked ->
-                                AdbModuleManager.setEnabled(module, checked)
+                                if (!AdbModuleManager.setEnabled(module, checked)) {
+                                    errorRes = R.string.modules_error_set_enabled
+                                }
                                 reload()
                             },
                             onRunAction = { actionFor = module },
@@ -695,6 +703,7 @@ fun ModulesScreen(
 @Composable
 private fun ModuleCard(
     module: AdbModule,
+    enabled: Boolean,
     expanded: Boolean,
     serviceRunning: Boolean,
     update: ModuleUpdate?,
@@ -779,7 +788,7 @@ private fun ModuleCard(
                     }
 
                     Switch(
-                        checked = module.enabled,
+                        checked = enabled,
                         onCheckedChange = onEnabledChange
                     )
                 }
@@ -801,7 +810,7 @@ private fun ModuleCard(
                         content = MaterialTheme.colorScheme.onPrimary
                     )
 
-                    if (!module.enabled) {
+                    if (!enabled) {
                         ModuleChip(
                             text = stringResource(R.string.modules_disabled),
                             container = MaterialTheme.colorScheme.errorContainer,
