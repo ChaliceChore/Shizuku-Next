@@ -9,8 +9,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.HourglassEmpty
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -118,17 +118,23 @@ fun ModuleActionScreen(module: AdbModule, onBack: () -> Unit) {
                 }
             },
             actions = {
-                IconButton(onClick = { if (!running) run() }, enabled = !running) {
-                    Icon(
-                        imageVector = if (running) {
-                            Icons.Outlined.HourglassEmpty
-                        } else {
-                            Icons.Outlined.PlayArrow
-                        },
-                        contentDescription = stringResource(
-                            if (running) R.string.modules_action_running else R.string.modules_action_run
+                if (running) {
+                    // The bar's one button stops the run it started. A script that will not end on
+                    // its own is the reason to have it, and the bar's progress line says which
+                    // state this button is in without the icon having to.
+                    IconButton(onClick = { AdbModuleManager.stopAction(module) }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Stop,
+                            contentDescription = stringResource(R.string.modules_action_stop)
                         )
-                    )
+                    }
+                } else {
+                    IconButton(onClick = { run() }) {
+                        Icon(
+                            imageVector = Icons.Outlined.PlayArrow,
+                            contentDescription = stringResource(R.string.modules_action_run)
+                        )
+                    }
                 }
             }
         )

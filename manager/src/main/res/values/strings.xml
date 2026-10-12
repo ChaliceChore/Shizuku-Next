@@ -450,7 +450,6 @@
     <string name="modules_sort_action_first">With an action first</string>
     <string name="modules_sort_webui_first">With a WebUI first</string>
     <string name="modules_action_stop">Stop</string>
-    <string name="modules_action_running">Running...</string>
     <string name="modules_web_ui_short">WebUI</string>
     <string name="modules_action_short">Action</string>
     <string name="modules_service_short">Service</string>

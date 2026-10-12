@@ -41,6 +41,9 @@ object AdbModuleManager {
     /** The services started and not yet stopped, so a user cannot start the same one twice. */
     private val services = ConcurrentHashMap<String, Process>()
 
+    /** The actions running right now, so a person can stop one instead of waiting it out. */
+    private val actions = ConcurrentHashMap<String, Process>()
+
     /** Where a service's output is read to, for as long as it runs. */
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -214,6 +217,25 @@ object AdbModuleManager {
     }
 
     /**
+     * Stops a module's running action, by killing the process the same way [stopService] does.
+     *
+     * The readers end when their streams do, so the run comes back with what the script had printed
+     * by then and with the exit code the kill gave it - the console shows the output so far rather
+     * than nothing, and the module's log keeps it. What the script started for itself is the
+     * script's own business; this stops the process the app started.
+     *
+     * False when the module has no action running.
+     */
+    fun stopAction(module: AdbModule): Boolean {
+        val process = actions.remove(module.id) ?: return false
+
+        return runCatching {
+            process.destroy()
+            true
+        }.getOrDefault(false)
+    }
+
+    /**
      * A command a module's own WebUI asked for.
      *
      * It is a separate path from an action because it is a separate trust decision: an action runs
@@ -264,7 +286,7 @@ object AdbModuleManager {
             return ModuleActionResult(-1, "", "The command was not approved.")
         }
 
-        val result = runCommand(command, onOutput)
+        val result = runCommand(command, onOutput, moduleId = module.id)
 
         runCatching {
             log.parentFile?.mkdirs()
@@ -274,10 +296,17 @@ object AdbModuleManager {
         return result
     }
 
-    /** Runs [command] as shell, with the output capped and the clock running. */
+    /**
+     * Runs [command] as shell, with the output capped and the clock running.
+     *
+     * [moduleId] is the module the run belongs to. It is filed under that id for as long as it
+     * lives, which is how [stopAction] finds the process to kill - and why a run is only filed
+     * when somebody could want it stopped. Null for a command nobody is offered a way to stop.
+     */
     private suspend fun runCommand(
         command: String,
         onOutput: (String) -> Unit = {},
+        moduleId: String? = null,
     ): ModuleActionResult = withContext(Dispatchers.IO) {
         val process = newShellProcess(command)
             ?: return@withContext ModuleActionResult(-1, "", "Shizuku is not running.")
@@ -290,26 +319,34 @@ object AdbModuleManager {
         val reporting = Any()
         val report: (String) -> Unit = { text -> synchronized(reporting) { onOutput(text) } }
 
-        coroutineScope {
-            // Both streams are read on their own coroutine: a command that writes a lot would
-            // otherwise block on a full pipe while the other stream is being read.
-            val readers = listOf(
-                launch { readCapped(process.inputStream, stdout, report) },
-                launch { readCapped(process.errorStream, stderr, report) }
-            )
+        if (moduleId != null) actions[moduleId] = process
 
-            val exitCode = awaitExit(process, ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS * 1000L)
-            if (exitCode == null) {
-                // Out of time: the process is killed and the reader coroutines end with their
-                // streams. The exit code is the one the format uses for this, so a module can tell
-                // the difference between a failure and running too long.
-                runCatching { process.destroy() }
-                readers.joinAll()
-                ModuleActionResult(ModuleRunLimits.TIMEOUT_EXIT_CODE, stdout.toString(), stderr.toString())
-            } else {
-                readers.joinAll()
-                ModuleActionResult(exitCode, stdout.toString(), stderr.toString())
+        try {
+            coroutineScope {
+                // Both streams are read on their own coroutine: a command that writes a lot would
+                // otherwise block on a full pipe while the other stream is being read.
+                val readers = listOf(
+                    launch { readCapped(process.inputStream, stdout, report) },
+                    launch { readCapped(process.errorStream, stderr, report) }
+                )
+
+                val exitCode = awaitExit(process, ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS * 1000L)
+                if (exitCode == null) {
+                    // Out of time: the process is killed and the reader coroutines end with their
+                    // streams. The exit code is the one the format uses for this, so a module can
+                    // tell the difference between a failure and running too long.
+                    runCatching { process.destroy() }
+                    readers.joinAll()
+                    ModuleActionResult(ModuleRunLimits.TIMEOUT_EXIT_CODE, stdout.toString(), stderr.toString())
+                } else {
+                    readers.joinAll()
+                    ModuleActionResult(exitCode, stdout.toString(), stderr.toString())
+                }
             }
+        } finally {
+            // A run that has ended is not something to stop, so the entry goes as soon as it does -
+            // whether it ended on its own, on the clock, or on the stop button.
+            if (moduleId != null) actions.remove(moduleId)
         }
     }
 
