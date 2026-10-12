@@ -43,7 +43,8 @@ import moe.shizuku.manager.module.ModuleSettings
  *
  * Their screen, and their reason for having one: an action is something a person sits and watches,
  * and what it printed is what they came for - so the output stays on the screen instead of leaving
- * with a dialog, and running it again is one button in the bar.
+ * with a dialog, it appears while the script is still printing rather than after it stops, and
+ * running it again is one button in the bar.
  *
  * The command still goes through the review first, which is this fork's own rule and not theirs:
  * an action here runs as shell through Shizuku rather than as root.
@@ -76,8 +77,15 @@ fun ModuleActionScreen(module: AdbModule, onBack: () -> Unit) {
             output = ""
             exitCode = null
 
-            val result = AdbModuleManager.runAction(module, approve)
-            output = result.combinedOutput
+            // The console fills while the script runs: each piece is appended as it is read,
+            // instead of everything appearing at once when the script is already over.
+            val result = AdbModuleManager.runAction(module, approve) { piece ->
+                output += piece
+            }
+
+            // A script that printed nothing is still a script that finished, and this is how the
+            // console said so when the whole output arrived at the end.
+            if (output.isBlank()) output = result.combinedOutput
             exitCode = result.exitCode
             running = false
         }

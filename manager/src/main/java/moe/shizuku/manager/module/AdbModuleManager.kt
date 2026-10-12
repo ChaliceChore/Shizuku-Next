@@ -129,17 +129,24 @@ object AdbModuleManager {
      *
      * An action is a person pressing a button, so it is always allowed to run - what may not run is
      * a command the user has not seen, which is what the approval is for.
+     *
+     * [onOutput] is handed each piece of output as it is read, which is what a console showing a
+     * script while it runs needs - the finished run is still returned whole. It is called from
+     * whichever stream the piece came off, so a caller that touches state of its own is answered
+     * one piece at a time but not from one thread: the two streams are read at once.
      */
     suspend fun runAction(
         module: AdbModule,
         approve: suspend (ModuleCommandRequest) -> Boolean,
+        onOutput: (String) -> Unit = {},
     ): ModuleActionResult = runScript(
         module = module,
         script = module.actionScript,
         missing = "This module has no action script.",
         background = false,
         approve = approve,
-        log = module.lastActionLog
+        log = module.lastActionLog,
+        onOutput = onOutput
     )
 
     /**
@@ -233,6 +240,7 @@ object AdbModuleManager {
         background: Boolean,
         approve: suspend (ModuleCommandRequest) -> Boolean,
         log: File,
+        onOutput: (String) -> Unit = {},
     ): ModuleActionResult {
         if (script == null) return ModuleActionResult(-1, "", missing)
         if (!module.enabled) return ModuleActionResult(-1, "", "The module is switched off.")
@@ -250,7 +258,7 @@ object AdbModuleManager {
             return ModuleActionResult(-1, "", "The command was not approved.")
         }
 
-        val result = runCommand(command)
+        val result = runCommand(command, onOutput)
 
         runCatching {
             log.parentFile?.mkdirs()
@@ -261,19 +269,27 @@ object AdbModuleManager {
     }
 
     /** Runs [command] as shell, with the output capped and the clock running. */
-    private suspend fun runCommand(command: String): ModuleActionResult = withContext(Dispatchers.IO) {
+    private suspend fun runCommand(
+        command: String,
+        onOutput: (String) -> Unit = {},
+    ): ModuleActionResult = withContext(Dispatchers.IO) {
         val process = newShellProcess(command)
             ?: return@withContext ModuleActionResult(-1, "", "Shizuku is not running.")
 
         val stdout = StringBuilder()
         val stderr = StringBuilder()
 
+        // The two streams are read at once and each reports its own pieces, so what the caller is
+        // handed is serialised here: one piece at a time, and never two of them at once.
+        val reporting = Any()
+        val report: (String) -> Unit = { text -> synchronized(reporting) { onOutput(text) } }
+
         coroutineScope {
             // Both streams are read on their own coroutine: a command that writes a lot would
             // otherwise block on a full pipe while the other stream is being read.
             val readers = listOf(
-                launch { readCapped(process.inputStream, stdout) },
-                launch { readCapped(process.errorStream, stderr) }
+                launch { readCapped(process.inputStream, stdout, report) },
+                launch { readCapped(process.errorStream, stderr, report) }
             )
 
             val exitCode = awaitExit(process, ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS * 1000L)
@@ -306,12 +322,18 @@ object AdbModuleManager {
     }
 
     /**
-     * Reads a process's stream into [sink], keeping only what fits.
+     * Reads a process's stream into [sink], keeping only what fits, and hands each piece to
+     * [onChunk].
      *
      * A module that prints in a loop would otherwise fill the manager's heap with its log: the
-     * format gives a stream a cap, and this is where it is applied.
+     * format gives a stream a cap, and this is where it is applied. What is reported is exactly
+     * what is kept, so a console and the log cannot come to hold different things.
      */
-    private fun readCapped(stream: InputStream, sink: StringBuilder) {
+    private fun readCapped(
+        stream: InputStream,
+        sink: StringBuilder,
+        onChunk: (String) -> Unit = {},
+    ) {
         runCatching {
             val buffer = ByteArray(8 * 1024)
             var total = 0
@@ -321,8 +343,10 @@ object AdbModuleManager {
                 if (read <= 0) break
 
                 val room = ModuleRunLimits.MAX_OUTPUT_BYTES - total
-                sink.append(String(buffer, 0, minOf(read, room), Charsets.UTF_8))
+                val text = String(buffer, 0, minOf(read, room), Charsets.UTF_8)
+                sink.append(text)
                 total += read
+                onChunk(text)
             }
         }
     }
