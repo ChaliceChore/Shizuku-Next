@@ -45,7 +45,7 @@ Get the latest build from [Releases](https://github.com/rushiranpise/Shizuku-Nex
 
 ### Manager tools
 - Material 3 interface with Home, Apps, Modules, Labs, and Settings.
-- Manage Shizuku access, app permissions, app ops, battery settings, and app network access.
+- Manage Shizuku access, app permissions, app ops, battery settings, and app network access, with a fallback to the platform's own firewall API on ROMs whose connectivity command is missing.
 - Inspect app details and launch activities.
 - Built-in shell, log viewer, file browser, and app installer.
 - Manage saved Wi-Fi networks and export/import their credentials.
@@ -131,6 +131,7 @@ The debug task builds a debuggable server. In Android Studio, enable **Always in
 - [thedjchi](https://github.com/thedjchi/Shizuku) - upstream fork and many inherited features.
 - [kerneldroid](https://github.com/kerneldroid) - [Nightzuku](https://github.com/kerneldroid/Nightzuku), where the ADB modules feature comes from: the module format itself, actions and services, and the `window.Shizuku` WebUI bridge.
 - [Shevery](https://github.com/HmnDev-Tech/shevery) - the published module API and guide this app's module support is written against, and the module catalogue it searches.
+- [ShizuWall](https://github.com/AhmetCanArslan/ShizuWall) (AhmetCanArslan) - the firewall's fallback to the system API where a ROM has no connectivity command for it to use, and the technique behind it: the interface reached as Shizuku with a wrapped binder, by reflection.
 - [Xhizuku](https://github.com/xeonleonreal/Xhizuku) - the other implementation of that format, whose documentation this one is checked against.
 - [KernelSU-Next](https://github.com/KernelSU-Next/KernelSU-Next) - the card, chip and tab layout the modules list and the Material 3 interface follow.
 - [MMRL](https://github.com/MMRLApp/MMRL) - the label component whose default accent colour the module cards' size chip follows.

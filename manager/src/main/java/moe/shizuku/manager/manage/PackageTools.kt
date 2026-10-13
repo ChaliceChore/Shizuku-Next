@@ -270,7 +270,7 @@ object PackageTools {
             ops = if (running) readOps(context, packageName) else emptyList(),
             bucket = if (running) readBucket(context, packageName) else null,
             batteryUnrestricted = running && isBatteryUnrestricted(context, packageName),
-            networkBlocked = if (running) readNetworkBlocked(packageName) else null
+            networkBlocked = if (running) readNetworkBlocked(context, packageName) else null
         )
     }
 
@@ -517,15 +517,48 @@ object PackageTools {
      * rather than what this app last asked for. The command answers `package:deny` or
      * `package:allow` on stdout.
      */
-    fun readNetworkBlocked(packageName: String): Boolean? {
+    fun readNetworkBlocked(context: Context, packageName: String): Boolean? {
         val answer = runShellCommand("cmd connectivity get-package-networking-enabled $packageName")
-            ?: return null
-        return when {
-            answer.endsWith(":deny") -> true
-            answer.endsWith(":allow") -> false
-            else -> null
+        when {
+            answer?.endsWith(":deny") == true -> return true
+            answer?.endsWith(":allow") == true -> return false
         }
+
+        // The command could not say - it is missing on some ROMs, which is the whole reason for the
+        // fallback - so the platform is asked through the interface the command is a front end for.
+        val uid = uidOf(context, packageName) ?: return null
+        return FirewallApi.isBlocked(FirewallApi.blockedRule(uid))
     }
+
+    /**
+     * Whether the firewall chain is on, by the ROM's command or by the platform behind it.
+     *
+     * Null when neither can say, which is passed on as itself rather than guessed at.
+     */
+    private fun chainEnabled(): Boolean? {
+        val answer = runShellCommand("cmd connectivity get-chain3-enabled")
+        when {
+            answer?.endsWith(":enabled") == true -> return true
+            answer?.endsWith(":disabled") == true -> return false
+        }
+
+        return FirewallApi.chainEnabled()
+    }
+
+    /** Switches the chain on or off, by the ROM's command and otherwise by the platform. */
+    private fun setChainEnabled(enabled: Boolean): Boolean =
+        shellOk("cmd connectivity set-chain3-enabled ${if (enabled) "true" else "false"}") ||
+            FirewallApi.setChainEnabled(enabled)
+
+    /**
+     * The uid the platform's firewall knows a package by.
+     *
+     * Asked of the local package manager rather than the shell: for an installed app it is the same
+     * number, and it costs nothing.
+     */
+    private fun uidOf(context: Context, packageName: String): Int? = runCatching {
+        context.packageManager.getApplicationInfo(packageName, 0).uid
+    }.getOrNull()
 
     /**
      * Blocks or allows this app's traffic with the platform's own firewall, no VPN involved.
@@ -537,14 +570,23 @@ object PackageTools {
      * why the row says what it is rather than pretending it is a documented feature.
      */
     fun setNetworkBlocked(context: Context, packageName: String, blocked: Boolean): Boolean {
-        val chain = runShellCommand("cmd connectivity get-chain3-enabled")
-        if (chain?.endsWith(":enabled") != true) {
-            shellOk("cmd connectivity set-chain3-enabled true")
+        if (chainEnabled() != true) {
+            setChainEnabled(true)
         }
 
         val value = if (blocked) "false" else "true"
         val ran = shellOk("cmd connectivity set-package-networking-enabled $value $packageName")
-        val applied = ran && readNetworkBlocked(packageName) == blocked
+
+        // A ROM whose connectivity command has no such verb answers that it did not run, and the
+        // same rule is set through the interface behind the command instead.
+        if (!ran) {
+            val uid = uidOf(context, packageName) ?: return false
+            if (!FirewallApi.setBlocked(uid, blocked)) return false
+        }
+
+        // Read back rather than trusted, whichever way it was set: the read has the same fallback,
+        // so what the switch shows is what the platform holds.
+        val applied = readNetworkBlocked(context, packageName) == blocked
         // Recorded only once the platform agreed, because this is what the Firewall list shows
         // and a list that says a package is blocked when it is not is worse than no list.
         if (applied) rememberFirewallBlocked(context, packageName, blocked)
@@ -657,7 +699,7 @@ object PackageTools {
         val gone = toReapply(recorded, installedPackageNames()) { packageName ->
             // A failed read counts as still blocked: blocking it again would fail for the same
             // reason, and the next start asks again anyway.
-            readNetworkBlocked(packageName) != false
+            readNetworkBlocked(context, packageName) != false
         }
         return gone.count { setNetworkBlocked(context, it, true) }
     }
