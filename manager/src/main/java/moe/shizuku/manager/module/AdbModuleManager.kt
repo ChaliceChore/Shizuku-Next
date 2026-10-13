@@ -253,7 +253,12 @@ object AdbModuleManager {
         approve: suspend (ModuleCommandRequest) -> Boolean,
         timeoutSeconds: Int = ModuleRunLimits.SCRIPT_TIMEOUT_SECONDS,
     ): ModuleActionResult {
-        if (!ModuleWebUi.canUseShellBridge(module, ModuleSettings.getAccessMode())) {
+        if (!ModuleWebUi.canUseShellBridge(
+                module,
+                ModuleSettings.getAccessMode(),
+                ModuleSettings.isTrusted(module.id)
+            )
+        ) {
             return ModuleActionResult(-1, "", "This module has no shell bridge.")
         }
 

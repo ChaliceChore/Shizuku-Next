@@ -38,7 +38,8 @@ class ModuleJsBridge(
         ModuleWebUi.moduleInfoJson(
             module = module,
             mode = ModuleSettings.getAccessMode(),
-            trusted = ModuleSettings.isTrusted(module.id)
+            trusted = ModuleSettings.isTrusted(module.id),
+            backgroundAllowed = ModuleSettings.allowsBackground()
         )
 
     @JavascriptInterface
@@ -62,7 +63,7 @@ class ModuleJsBridge(
 
     private fun runCommandJson(command: String, timeoutSeconds: Int): String {
         val mode = ModuleSettings.getAccessMode()
-        if (!ModuleWebUi.canUseShellBridge(module, mode)) {
+        if (!ModuleWebUi.canUseShellBridge(module, mode, ModuleSettings.isTrusted(module.id))) {
             return ModuleWebUi.refusedJson("This module has no shell bridge.")
         }
 

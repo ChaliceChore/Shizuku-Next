@@ -48,6 +48,11 @@ class ModuleWebUiTest {
     private fun field(json: String, name: String): String? =
         (Json.parseToJsonElement(json) as? JsonObject)?.get(name)?.jsonPrimitive?.content
 
+    /** A field of a nested object, which is where the format's pages read their permissions. */
+    private fun nested(json: String, parent: String, name: String): String? =
+        ((Json.parseToJsonElement(json) as? JsonObject)?.get(parent) as? JsonObject)
+            ?.get(name)?.jsonPrimitive?.content
+
     @Test
     fun `the shell bridge needs the module to ask, full access, and the module on`() {
         assertTrue(ModuleWebUi.canUseShellBridge(module(), ModuleAccessMode.FULL))
@@ -56,6 +61,22 @@ class ModuleWebUiTest {
         assertFalse(ModuleWebUi.canUseShellBridge(module(), ModuleAccessMode.SAFE))
         assertFalse(ModuleWebUi.canUseShellBridge(module(bridge = false), ModuleAccessMode.FULL))
         assertFalse(ModuleWebUi.canUseShellBridge(module(bridge = false, enabled = false), ModuleAccessMode.FULL))
+    }
+
+    @Test
+    fun `a trusted module gets the bridge without asking, and nothing else does`() {
+        // The format's own rule: a page is told the bridge is there when the module declared it or
+        // the user trusted it. A page that is told otherwise says the bridge is missing and names
+        // Full access and Full Trust as the way out, which is what this app used to leave a user
+        // staring at with both of them already on.
+        assertTrue(ModuleWebUi.canUseShellBridge(module(bridge = false), ModuleAccessMode.FULL, trusted = true))
+
+        // Trust is not a way round the other two: switched off is switched off, and Safe is Safe.
+        assertFalse(ModuleWebUi.canUseShellBridge(module(bridge = false, enabled = false), ModuleAccessMode.FULL, trusted = true))
+        assertFalse(ModuleWebUi.canUseShellBridge(module(bridge = false), ModuleAccessMode.SAFE, trusted = true))
+
+        // A module that did not ask and is not trusted is still refused, which is the whole point.
+        assertFalse(ModuleWebUi.canUseShellBridge(module(bridge = false), ModuleAccessMode.FULL, trusted = false))
     }
 
     @Test
@@ -81,6 +102,36 @@ class ModuleWebUiTest {
         // Everything a page needs to find its own files, as the format documents it.
         assertEquals(module().name, field(info, "name"))
         assertTrue(field(info, "moduleDir")!!.endsWith("my-module"))
+    }
+
+    @Test
+    fun `the permissions object says what the format's pages ask about`() {
+        val declared = ModuleWebUi.moduleInfoJson(
+            module = module(),
+            mode = ModuleAccessMode.FULL,
+            trusted = false,
+            backgroundAllowed = true
+        )
+
+        assertEquals("true", field(declared, "ok"))
+        assertEquals("true", nested(declared, "permissions", "action"))
+        assertEquals("true", nested(declared, "permissions", "service"))
+        assertEquals("true", nested(declared, "permissions", "webBridge"))
+        assertEquals("true", nested(declared, "permissions", "declaresShellBridge"))
+
+        // Answers a page can act on rather than wait on: this bridge has no network and no file
+        // loader, so a page told otherwise would wait for a download that never comes.
+        assertEquals("false", nested(declared, "permissions", "webNetwork"))
+        assertEquals("false", nested(declared, "permissions", "webDownload"))
+
+        // A module that never asked for the bridge, trusted: the answer their pages decide on.
+        val trusted = ModuleWebUi.moduleInfoJson(
+            module = module(bridge = false),
+            mode = ModuleAccessMode.FULL,
+            trusted = true
+        )
+        assertEquals("true", nested(trusted, "permissions", "webBridge"))
+        assertEquals("false", nested(trusted, "permissions", "declaresShellBridge"))
     }
 
     @Test

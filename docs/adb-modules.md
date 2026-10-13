@@ -169,9 +169,16 @@ The WebView is configured for an offline page:
 
 ```javascript
 const info = JSON.parse(window.Shizuku.getModuleInfo());
-// { id, name, version, versionCode, author, description,
-//   enabled, accessMode, trusted, moduleDir, shellBridge }
+// { ok, id, name, version, versionCode, author, description, enabled, accessMode,
+//   trusted, moduleDir, webRoot, background, shellBridge,
+//   permissions: { action, service, webBridge, webNetwork, webDownload, declaresShellBridge } }
 ```
+
+Both shapes are there on purpose: the flat fields are the ones this format's published API
+documents, and `permissions` is what the pages written for its other implementations read -
+`permissions.webBridge` is the one that decides whether a page shows its bridge as available.
+`webNetwork` and `webDownload` are `false` and always will be: a page here has no network at all, so
+a page told the truth about it can fall back instead of waiting for a download that never comes.
 
 ```javascript
 const result = JSON.parse(window.Shizuku.exec("id"));
@@ -201,7 +208,7 @@ the `moduleDir` from `getModuleInfo()`.
 Shell methods answer only when all of these hold:
 
 - the module is switched on;
-- its `module.prop` says `usesShellBridge=true`;
+- its `module.prop` says `usesShellBridge=true`, **or the module is trusted**;
 - access is **Full access**.
 
 A page that is not allowed still gets `getModuleInfo()`; calls to `exec` answer with
@@ -213,10 +220,13 @@ A module can be trusted, which means its commands run without being shown first.
 on the modules screen: the action row gains **Trust**, and a trusted module carries a **Full Trust**
 chip. Long-press again to hide the action.
 
-Trust covers the review, and only the review: an action, a service and a page's commands all skip it.
-Everything else still applies - the module is still switched off with its switch, output is still
-capped, the clock still stops a run, and the WebUI's shell bridge still needs
-`usesShellBridge=true` and Full access. `SHIZUKU_MODULE_TRUSTED` tells a script which state it is in.
+Trust covers the review: an action, a service and a page's commands all skip it. It also stands in
+for a module that did not ask for the WebUI bridge in its `module.prop` - the same rule the format's
+other implementations use, and the one their pages check, so a trusted module's page is told its
+bridge is there. Everything else still applies: the module is still switched off with its switch,
+output is still capped, the clock still stops a run, and the bridge still needs **Full access** -
+trust replaces the module's own request for it, not the access mode. `SHIZUKU_MODULE_TRUSTED` tells a
+script which state it is in.
 
 ## Switching on and off
 
@@ -276,7 +286,7 @@ Everything above works as the format documents it. These are the differences wor
 | Output past the cap | first 64 KB kept, rest drained | last 64 KB kept, drained |
 | WebUI `window.Shizuku.download(...)` | not provided | provided |
 | ReCommand, command suggestions, AI checker | not provided | provided |
-| Full Trust and the shell bridge | still needs `usesShellBridge=true` and Full access | trust bypasses that gate too |
+| Full Trust and the shell bridge | Full access plus either `usesShellBridge=true` or trust | the same rule |
 | WebUI internet, WebUI download gates | not applicable - a page has no network at all | trust bypasses them |
 | `update.json` | this app's own convention | not part of the format |
 | Module catalogue | GitHub topic search, newest release's first zip | topic search, with per-author limits |
