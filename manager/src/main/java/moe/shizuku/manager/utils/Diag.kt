@@ -197,14 +197,31 @@ object Diag {
             ?: ShizukuApplication.application.filesDir
         val out = File(dir, "shizuku-log-$stamp.txt")
         return runCatching {
-            out.writeText(
-                entries().joinToString("\n") { entry ->
-                    "${stamp(entry.at)} ${entry.level} ${entry.tag}: ${entry.message}"
-                } + "\n"
-            )
+            out.writeText(entries().joinToString("\n", transform = ::line) + "\n")
             out
         }.getOrNull()
     }
+
+    /**
+     * One line as a report reads it: when, how loud, who said it, and what it said.
+     *
+     * The same shape the export writes and a bug report carries, in one place, so the three
+     * cannot drift apart.
+     */
+    fun line(entry: Entry): String =
+        "${stamp(entry.at)} ${entry.level} ${entry.tag}: ${entry.message}"
+
+    /**
+     * The tail of the window, newest last, for a report that has to travel with it.
+     *
+     * Bounded in both lines and width, because of where it goes: a report body is carried to
+     * GitHub in a URL, and the window holds up to four thousand lines of a day. The end of it is
+     * the part a report needs anyway - it is filed right after the thing went wrong, and the far
+     * end of a day is the part that has nothing to do with it. A long line is cut rather than
+     * dropped, so one dumpsys line cannot take the room a hundred ordinary ones share.
+     */
+    fun tail(maxLines: Int, maxLineChars: Int): List<String> =
+        entries().takeLast(maxLines).map { line(it).take(maxLineChars) }
 
     /** `HH:mm:ss.SSS`, the shape a log line wants. */
     fun stamp(at: Long): String =

@@ -728,11 +728,10 @@
     <string name="bug_report_dialog_link_wiki">wiki</string>
     <string name="bug_report_dialog_issues">Search through all ^1 to see if your bug has already been reported.</string>
     <string name="bug_report_dialog_link_issues">existing issues</string>
-    <string name="bug_report_dialog_method">Please submit an issue on ^1 if you have an account.</string>
-    <string name="bug_report_dialog_method_2">Otherwise, you can send an email.</string>
-    <string name="bug_report_dialog_button_email">Email</string>
-    <string name="bug_report_dialog_diagnostics_note">Your current diagnostics are filled in at the top of the issue and the email.</string>
+    <string name="bug_report_dialog_method">Please submit an issue on ^1.</string>
+    <string name="bug_report_dialog_diagnostics_note">Your current diagnostics and the app log are filled in at the top of the issue.</string>
     <string name="bug_report_dialog_body_prompt">Please describe the bug. Include steps to reproduce if possible, as well as any relevant images/logs.</string>
+    <string name="bug_report_dialog_log_note">Log (last %1$d lines):</string>
 
     <!-- Snackbar -->
     <string name="snackbar_battery_optimization_settings">Turn off battery optimization to use this feature.</string>
@@ -755,7 +754,6 @@
     <string name="update_failed">Update failed</string>
 
     <!-- Toast -->
-    <string name="toast_no_email_app">No email app found</string>
     <string name="toast_pairing_timeout">Shizuku pairing service timed out</string>
 
     <!-- Dark Mode Setting Override -->
