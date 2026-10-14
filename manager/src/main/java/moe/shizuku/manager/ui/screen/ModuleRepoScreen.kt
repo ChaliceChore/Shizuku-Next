@@ -73,6 +73,7 @@ import moe.shizuku.manager.module.ModuleCatalog
 import moe.shizuku.manager.module.ModuleRepo
 import moe.shizuku.manager.module.ModuleSettings
 import moe.shizuku.manager.module.Release
+import moe.shizuku.manager.ui.component.cardOutline
 import moe.shizuku.manager.utils.CustomTabsHelper
 
 /**
@@ -344,6 +345,8 @@ private fun ModuleRepoCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
+            // Invisible on the black theme without it: see Modifier.cardOutline.
+            .cardOutline()
             .clickable(onClick = onOpen)
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {

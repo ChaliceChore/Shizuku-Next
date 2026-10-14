@@ -106,6 +106,7 @@ import moe.shizuku.manager.module.ModuleSettings
 import moe.shizuku.manager.module.ModuleUpdate
 import moe.shizuku.manager.ui.component.PillButton
 import moe.shizuku.manager.ui.component.PillButtonQuiet
+import moe.shizuku.manager.ui.component.cardOutline
 
 /**
  * The modules this app has installed.
@@ -788,6 +789,9 @@ private fun ModuleCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
+            // Otherwise invisible on the black theme, where the card and the page are the same
+            // colour: the same hairline the app's own cards draw.
+            .cardOutline()
             // Their gesture for the trust action: a long press reveals it, another hides it.
             .combinedClickable(
                 onClick = onExpandToggle,

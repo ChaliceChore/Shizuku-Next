@@ -71,6 +71,7 @@ import moe.shizuku.manager.module.ModuleCatalogException
 import moe.shizuku.manager.module.ModuleRepo
 import moe.shizuku.manager.ui.component.PillButton
 import moe.shizuku.manager.ui.component.PillButtonQuiet
+import moe.shizuku.manager.ui.component.cardOutline
 import moe.shizuku.manager.utils.CustomTabsHelper
 
 /** What a catalog lists. */
@@ -406,7 +407,9 @@ fun CatalogScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.large),
+                        .clip(MaterialTheme.shapes.large)
+                        // Invisible on the black theme without it: see Modifier.cardOutline.
+                        .cardOutline(),
                     onClick = {
                         openRepo = if (openRepo == repo.fullName) null else repo.fullName
                     }
