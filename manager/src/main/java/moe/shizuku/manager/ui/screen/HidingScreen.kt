@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -152,15 +151,6 @@ fun HidingScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item {
-                Text(
-                    text = stringResource(R.string.hiding_hub_summary),
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
             items(rows, key = { it.signal.name }) { row ->
                 // The icon and the route both come from the feature the signal belongs to, which
                 // is where the two are decided; a signal with no feature has no list to open.

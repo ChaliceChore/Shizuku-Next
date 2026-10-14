@@ -152,7 +152,6 @@
 
     <!-- Hiding: what apps can read about this device -->
     <string name="tab_hiding">Hiding</string>
-    <string name="hiding_hub_summary">Every mode in one place. Each is hidden from the apps you list for it, while one of them is open.</string>
     <string name="tab_hide_developer_options">Hide developer options</string>
     <string name="tab_hide_usb_debugging">Hide USB debugging</string>
     <string name="tab_hide_wireless_debugging">Hide wireless debugging</string>
