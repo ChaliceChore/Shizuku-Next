@@ -31,6 +31,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.ReceiptLong
 import androidx.compose.material.icons.outlined.Terminal
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -171,36 +172,9 @@ fun LabsScreen(bottomPadding: Dp, onOpenDetail: (Detail) -> Unit) {
             AppToggleFeature.AUTOSTART.icon,
             Detail.AUTOSTART
         ),
-        LabEntry(
-            AppToggleFeature.HIDE_DEVELOPER_OPTIONS.titleRes,
-            AppToggleFeature.HIDE_DEVELOPER_OPTIONS.icon,
-            Detail.HIDE_DEVELOPER_OPTIONS
-        ),
-        LabEntry(
-            AppToggleFeature.HIDE_USB_DEBUGGING.titleRes,
-            AppToggleFeature.HIDE_USB_DEBUGGING.icon,
-            Detail.HIDE_USB_DEBUGGING
-        ),
-        LabEntry(
-            AppToggleFeature.HIDE_WIRELESS_DEBUGGING.titleRes,
-            AppToggleFeature.HIDE_WIRELESS_DEBUGGING.icon,
-            Detail.HIDE_WIRELESS_DEBUGGING
-        ),
-        LabEntry(
-            AppToggleFeature.HIDE_ACCESSIBILITY.titleRes,
-            AppToggleFeature.HIDE_ACCESSIBILITY.icon,
-            Detail.HIDE_ACCESSIBILITY
-        ),
-        LabEntry(
-            AppToggleFeature.HIDE_PRIVATE_DNS.titleRes,
-            AppToggleFeature.HIDE_PRIVATE_DNS.icon,
-            Detail.HIDE_PRIVATE_DNS
-        ),
-        LabEntry(
-            AppToggleFeature.HIDE_VPN.titleRes,
-            AppToggleFeature.HIDE_VPN.icon,
-            Detail.HIDE_VPN
-        ),
+        // The six hiding modes are one tile rather than six: they are the same list with a
+        // different setting behind it, and six tiles of the same shape was most of the grid.
+        LabEntry(R.string.tab_hiding, Icons.Outlined.VisibilityOff, Detail.HIDING),
         LabEntry(R.string.tab_log, Icons.Outlined.ReceiptLong, Detail.LOG),
         LabEntry(R.string.tab_device_info, Icons.Outlined.PhoneAndroid, Detail.DEVICE_INFO),
         LabEntry(R.string.tab_force_dark, Icons.Outlined.DarkMode, Detail.FORCE_DARK),
@@ -283,34 +257,35 @@ fun LabsScreen(bottomPadding: Dp, onOpenDetail: (Detail) -> Unit) {
  * dot of its own. Activities, device info, the log, the shell and More Apps are places to look
  * rather than things that run, so there is no state of theirs to report either.
  */
-private fun activeFeatures(context: Context): Set<Detail> {
-    val byFeature = Detail.entries
-        .filter { it.feature != null }
-        .associateBy { it.feature!! }
-
-    return buildSet {
-        AppToggleFeature.entries.forEach { feature ->
-            val detail = byFeature[feature] ?: return@forEach
-
-            val count = when {
-                // The mode has to be on for the list to be doing anything, which is the whole
-                // difference between the two hiding lists that look alike from the grid.
-                feature.signal != null ->
-                    if (Hiding.isSignalEnabled(feature.signal)) Hiding.appsFor(feature.signal).size
-                    else 0
-
-                feature == AppToggleFeature.AUTOSTART ->
-                    PackageTools.readOpDeniedInstalled(feature.op).size
-                else -> PackageTools.readFirewallBlocked(context).size
-            }
-
-            if (count > 0) add(detail)
+private fun activeFeatures(context: Context): Set<Detail> = buildSet {
+    AppToggleFeature.entries.forEach { feature ->
+        // Every hiding signal answers for the grouped tile rather than for a detail of its
+        // own: whichever of the six is doing something lights the one dot, and the set is
+        // what keeps six answers from becoming six entries.
+        val detail = if (feature.signal != null) {
+            Detail.HIDING
+        } else {
+            Detail.of(feature) ?: return@forEach
         }
 
-        // The other switch in the grid, and the same question asked of it: on, and with apps to
-        // act on.
-        if (ForceDark.hasWorkToDo()) add(Detail.FORCE_DARK)
+        val count = when {
+            // The mode has to be on for the list to be doing anything, which is the whole
+            // difference between the two hiding lists that look alike from the grid.
+            feature.signal != null ->
+                if (Hiding.isSignalEnabled(feature.signal)) Hiding.appsFor(feature.signal).size
+                else 0
+
+            feature == AppToggleFeature.AUTOSTART ->
+                PackageTools.readOpDeniedInstalled(feature.op).size
+            else -> PackageTools.readFirewallBlocked(context).size
+        }
+
+        if (count > 0) add(detail)
     }
+
+    // The other switch in the grid, and the same question asked of it: on, and with apps to
+    // act on.
+    if (ForceDark.hasWorkToDo()) add(Detail.FORCE_DARK)
 }
 
 /** One tile of the grid: what it is called, what is on it, and where it goes. */

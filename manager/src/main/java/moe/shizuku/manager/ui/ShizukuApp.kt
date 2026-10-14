@@ -90,6 +90,7 @@ import moe.shizuku.manager.ui.screen.AppsScreen
 import moe.shizuku.manager.ui.screen.ActivitiesScreen
 import moe.shizuku.manager.ui.screen.FilesScreen
 import moe.shizuku.manager.ui.screen.ForceDarkScreen
+import moe.shizuku.manager.ui.screen.HidingScreen
 import moe.shizuku.manager.ui.screen.HomeScreen
 import moe.shizuku.manager.ui.screen.AppToggleFeature
 import moe.shizuku.manager.ui.screen.InstallerScreen
@@ -127,6 +128,13 @@ enum class Detail(
     SHELL,
     FIREWALL(AppToggleFeature.FIREWALL),
     AUTOSTART(AppToggleFeature.AUTOSTART),
+
+    /**
+     * The six hiding modes, as one tile. Each mode still has its own detail below, which is what
+     * the list screens are addressed by, but the grid offers this one and the modes are reached
+     * through the screen it opens.
+     */
+    HIDING,
     HIDE_DEVELOPER_OPTIONS(AppToggleFeature.HIDE_DEVELOPER_OPTIONS),
     HIDE_USB_DEBUGGING(AppToggleFeature.HIDE_USB_DEBUGGING),
     HIDE_WIRELESS_DEBUGGING(AppToggleFeature.HIDE_WIRELESS_DEBUGGING),
@@ -152,7 +160,12 @@ enum class Detail(
     PERMISSIONS,
 
     /** The community's module index, shown here only when there was no browser to open it in. */
-    MORE_APPS
+    MORE_APPS;
+
+    companion object {
+        /** The detail that opens [feature]'s list. Every feature has exactly one. */
+        fun of(feature: AppToggleFeature): Detail? = entries.firstOrNull { it.feature == feature }
+    }
 }
 
 /**
@@ -270,6 +283,14 @@ fun ShizukuApp() {
                             )
 
                             Detail.SHELL -> ShellScreen(bottomPadding = 0.dp, onBack = { detail = null })
+                            // The six hiding modes are one tile in the grid, and this is what
+                            // it opens: all of them, what each covers and whether it is on.
+                            Detail.HIDING -> HidingScreen(
+                                bottomPadding = 0.dp,
+                                onBack = { detail = null },
+                                onOpenDetail = { detail = it }
+                            )
+
                             Detail.FIREWALL,
                             Detail.AUTOSTART,
                             Detail.HIDE_DEVELOPER_OPTIONS,
