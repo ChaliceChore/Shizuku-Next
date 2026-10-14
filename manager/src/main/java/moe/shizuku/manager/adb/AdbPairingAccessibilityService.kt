@@ -38,6 +38,11 @@ import java.net.ConnectException
  *
  * On TV the dialog cannot be driven by hand, so the service brings the app up and
  * drives the whole flow itself, then switches off again.
+ *
+ * What it may look at is the settings app that hosts that dialog and nothing else: declared in
+ * the service configuration, and applied again to the windows this walks, because an
+ * accessibility service that reads whatever is on screen is the shape of the thing scanners are
+ * right to warn about.
  */
 class AdbPairingAccessibilityService : AccessibilityService() {
 
@@ -88,8 +93,7 @@ class AdbPairingAccessibilityService : AccessibilityService() {
 
         // The pairing dialog is always hosted by the settings app. Ignore every other
         // window rather than reading content we have no reason to look at.
-        val packageName = event.packageName?.toString().orEmpty()
-        if (!packageName.contains("settings", ignoreCase = true)) return
+        if (!hostsPairingDialog(event.packageName?.toString())) return
 
         // One read per event was enough while the dialog announced itself, but the tap that
         // opens it is the last event Android 17's dialog sends: the code is in the window a
@@ -131,6 +135,11 @@ class AdbPairingAccessibilityService : AccessibilityService() {
 
         for (window in windows) {
             val root = window?.root ?: continue
+
+            // The same test as the events, now applied to what is about to be read: the walk is
+            // bounded by the app it is willing to look at, and not only by what the text in the
+            // window happens to say. An app open beside the dialog is not read at all.
+            if (!hostsPairingDialog(root.packageName?.toString())) continue
 
             val texts = mutableListOf<String>()
             collectText(root, texts)
@@ -305,6 +314,20 @@ class AdbPairingAccessibilityService : AccessibilityService() {
 
         /** Long enough for discovery to answer, short enough to report a failure. */
         private const val PAIRING_DISCOVERY_TIMEOUT_MS = 8_000L
+
+        /**
+         * The name a settings app carries, which is the whole of what this service reads.
+         *
+         * Matched by that word rather than against a list of exact packages: every Android puts
+         * the pairing dialog in `com.android.settings`, TVs in `com.android.tv.settings`, and an
+         * OEM that calls its own something else still says "settings" in the name. The service
+         * configuration declares the two known ones, and has to be kept in step - a package it
+         * does not name never reaches this method at all.
+         */
+        private const val SETTINGS = "settings"
+
+        private fun hostsPairingDialog(packageName: String?): Boolean =
+            packageName?.contains(SETTINGS, ignoreCase = true) == true
 
         private val CODE_REGEX = Regex("""\d{6}""")
         private val HOST_PORT_REGEX = Regex("""(\d{1,3}(?:\.\d{1,3}){3}):(\d{2,5})""")
