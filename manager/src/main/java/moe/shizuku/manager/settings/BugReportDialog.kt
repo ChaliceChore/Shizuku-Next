@@ -19,21 +19,8 @@ import moe.shizuku.manager.ktx.asLink
 import moe.shizuku.manager.ktx.applyTemplateArgs
 import moe.shizuku.manager.ui.screen.readDiagnostics
 import moe.shizuku.manager.utils.CustomTabsHelper
-import moe.shizuku.manager.utils.Diag
 import moe.shizuku.manager.utils.shareAppLog
 import moe.shizuku.manager.worker.AdbStartWorker
-
-/**
- * How much of the app's own log travels with a report.
- *
- * It goes into the body of an issue, and that body is carried in a URL: the whole window is four
- * thousand lines of a day, which neither fits in one nor is what a report is read for. It is filed
- * right after the thing went wrong, so the end of the log is where the answer is, and the far end
- * of the day is the part with nothing to do with it. A long line is cut for the same reason, so
- * one dumpsys line cannot take the room a hundred ordinary ones share.
- */
-private const val REPORT_LOG_LINES = 100
-private const val REPORT_LOG_LINE_CHARS = 200
 
 class BugReportDialog : DialogFragment() {
 
@@ -53,14 +40,6 @@ class BugReportDialog : DialogFragment() {
      */
     @Volatile
     private var diagnostics: String = ""
-
-    /**
-     * The app's own log, read with the diagnostics and for the same reason: the block above says
-     * what state the device was in, and this says what the app did about it. A report holding one
-     * and not the other is the one that comes back asking for the other.
-     */
-    @Volatile
-    private var log: List<String> = emptyList()
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val context = requireContext()
@@ -86,11 +65,7 @@ class BugReportDialog : DialogFragment() {
         }
 
         lifecycleScope.launch {
-            val read = withContext(Dispatchers.IO) {
-                readDiagnostics(context) to Diag.tail(REPORT_LOG_LINES, REPORT_LOG_LINE_CHARS)
-            }
-            diagnostics = read.first
-            log = read.second
+            diagnostics = withContext(Dispatchers.IO) { readDiagnostics(context) }
         }
 
         return MaterialAlertDialogBuilder(context)
@@ -108,19 +83,16 @@ class BugReportDialog : DialogFragment() {
     }
 
     /**
-     * What the issue starts with: the diagnostics block, then the prompt to describe the bug, then
-     * the app's log.
+     * What the issue starts with: the diagnostics block, then the prompt to describe the bug.
      *
-     * The block goes first because it is the part that is already known. The log goes last because
-     * it is the longest and the least read, and what it is for is the report that says "the start
-     * fails" and nothing more - the answer to that is usually a line in there. Neither is invented
-     * when the read has not finished, so the body is never blocked on it.
+     * The block goes first because it is the part that is already known, and it is left out rather
+     * than blocked on while the read finishes, so a body is never held up by a binder call.
      *
-     * The log is fenced so it reads as lines rather than as prose and labelled with how much of it
-     * is there, and it is a tail of the window rather than all of it because of where this body
-     * goes. The rest is one tap away on the button under this text, which hands the whole file to
-     * wherever the reporter wants it; the tail is in the body as well because a report is often
-     * filed before anybody thinks to attach anything.
+     * The log used to follow, as a tail, and does not any more. A body travels to GitHub in a URL,
+     * so what could go in one was a hundred lines of a day and no more - the kind of half-answer
+     * that comes back asking for the rest, from the person least able to give it. The whole file
+     * leaves the app from the button under this text now, and there is one place to look for it
+     * rather than two that can disagree.
      */
     private fun reportBody(context: Context): String = buildString {
         if (diagnostics.isNotEmpty()) {
@@ -130,17 +102,6 @@ class BugReportDialog : DialogFragment() {
             appendLine()
         }
         append(context.getString(R.string.bug_report_dialog_body_prompt))
-        if (log.isNotEmpty()) {
-            appendLine()
-            appendLine()
-            appendLine("---")
-            appendLine()
-            appendLine(context.getString(R.string.bug_report_dialog_log_note, log.size))
-            appendLine()
-            appendLine("```")
-            log.forEach { entry -> appendLine(entry) }
-            appendLine("```")
-        }
     }
 
     /**
