@@ -196,11 +196,22 @@ object Diag {
         val dir = ShizukuApplication.application.getExternalFilesDir(null)
             ?: ShizukuApplication.application.filesDir
         val out = File(dir, "shizuku-log-$stamp.txt")
-        return runCatching {
-            out.writeText(entries().joinToString("\n", transform = ::line) + "\n")
-            out
-        }.getOrNull()
+        return out.takeIf { write(it) }
     }
+
+    /**
+     * The whole window written to [file], one line each, and whether it was written.
+     *
+     * A file rather than the text so the caller decides where it goes: the screen saves one where
+     * a file manager can find it, and a bug report shares one from the cache, which the file
+     * provider already hands out - the other place a report could write is under the external
+     * files directory, and everything else the app keeps there, its modules included, would be
+     * reachable through the same provider if that path were exposed to it.
+     */
+    fun write(file: File): Boolean = runCatching {
+        file.writeText(entries().joinToString("\n", transform = ::line) + "\n")
+        true
+    }.getOrDefault(false)
 
     /**
      * One line as a report reads it: when, how loud, who said it, and what it said.

@@ -4,8 +4,11 @@ import android.app.Dialog
 import android.app.NotificationManager
 import android.content.Context
 import android.content.DialogInterface
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -20,6 +23,7 @@ import moe.shizuku.manager.ui.screen.readDiagnostics
 import moe.shizuku.manager.utils.CustomTabsHelper
 import moe.shizuku.manager.utils.Diag
 import moe.shizuku.manager.worker.AdbStartWorker
+import java.io.File
 
 /**
  * How much of the app's own log travels with a report.
@@ -32,6 +36,17 @@ import moe.shizuku.manager.worker.AdbStartWorker
  */
 private const val REPORT_LOG_LINES = 100
 private const val REPORT_LOG_LINE_CHARS = 200
+
+/**
+ * Where the log is written for the share sheet.
+ *
+ * The cache, because the file provider already hands that directory out - see [Diag.write] for
+ * why the log cannot be exported where the screen saves it and shared from there - and because a
+ * file that exists to be handed to another app once has no business outliving the report.
+ */
+private const val REPORT_LOG_FILE = "shizuku-log.txt"
+
+private const val TAG = "BugReportDialog"
 
 class BugReportDialog : DialogFragment() {
 
@@ -80,6 +95,7 @@ class BugReportDialog : DialogFragment() {
             wikiText.applyTemplateArgs(wikiLink)
             issuesText.applyTemplateArgs(issuesLink)
             methodText.applyTemplateArgs("GitHub")
+            shareLog.setOnClickListener { shareLog() }
         }
 
         lifecycleScope.launch {
@@ -113,8 +129,11 @@ class BugReportDialog : DialogFragment() {
      * fails" and nothing more - the answer to that is usually a line in there. Neither is invented
      * when the read has not finished, so the body is never blocked on it.
      *
-     * The log is fenced so it reads as lines rather than as prose, and labelled with how much of
-     * it is there: the rest is in the app, under Log in Labs.
+     * The log is fenced so it reads as lines rather than as prose and labelled with how much of it
+     * is there, and it is a tail of the window rather than all of it because of where this body
+     * goes. The rest is one tap away on the button under this text, which hands the whole file to
+     * wherever the reporter wants it; the tail is in the body as well because a report is often
+     * filed before anybody thinks to attach anything.
      */
     private fun reportBody(context: Context): String = buildString {
         if (diagnostics.isNotEmpty()) {
@@ -134,6 +153,55 @@ class BugReportDialog : DialogFragment() {
             appendLine("```")
             log.forEach { entry -> appendLine(entry) }
             appendLine("```")
+        }
+    }
+
+    /**
+     * The whole log, handed to whatever the reporter picks so they can attach it.
+     *
+     * Written on IO and shared from the result: the window can hold a day of lines and this runs
+     * from a tap, so the write cannot be on the main thread. A failure is said out loud rather
+     * than swallowed: a button that appears to do nothing is worse than one that reports it could
+     * not write the file, and [R.string.bug_report_dialog_share_log_failed] is the only thing that
+     * can tell the two apart.
+     */
+    private fun shareLog() {
+        lifecycleScope.launch {
+            val context = context ?: return@launch
+
+            val file = withContext(Dispatchers.IO) {
+                File(context.cacheDir, REPORT_LOG_FILE).takeIf { Diag.write(it) }
+            }
+            if (file == null) {
+                Toast.makeText(
+                    context,
+                    R.string.bug_report_dialog_share_log_failed,
+                    Toast.LENGTH_SHORT
+                ).show()
+                return@launch
+            }
+
+            runCatching {
+                val uri = FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, file.name)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(Intent.createChooser(intent, null))
+            }.onFailure {
+                Diag.warn(TAG, "could not share the log", it)
+                Toast.makeText(
+                    context,
+                    R.string.bug_report_dialog_share_log_failed,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
 

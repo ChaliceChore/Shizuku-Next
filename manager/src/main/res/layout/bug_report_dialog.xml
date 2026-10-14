@@ -58,6 +58,16 @@
             android:layout_height="wrap_content"
             android:text="@string/bug_report_dialog_diagnostics_note" />
 
+        <!-- The issue body carries a tail of the log because a body is a URL. This is the rest
+             of it, handed to wherever the reporter wants it: the browser's file picker, a mail
+             to themselves, anything that can hold a file. -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/shareLog"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/bug_report_dialog_share_log" />
+
     </LinearLayout>
 
 </androidx.core.widget.NestedScrollView>
