@@ -4,11 +4,9 @@ import android.app.Dialog
 import android.app.NotificationManager
 import android.content.Context
 import android.content.DialogInterface
-import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
-import androidx.core.content.FileProvider
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -22,8 +20,8 @@ import moe.shizuku.manager.ktx.applyTemplateArgs
 import moe.shizuku.manager.ui.screen.readDiagnostics
 import moe.shizuku.manager.utils.CustomTabsHelper
 import moe.shizuku.manager.utils.Diag
+import moe.shizuku.manager.utils.shareAppLog
 import moe.shizuku.manager.worker.AdbStartWorker
-import java.io.File
 
 /**
  * How much of the app's own log travels with a report.
@@ -36,17 +34,6 @@ import java.io.File
  */
 private const val REPORT_LOG_LINES = 100
 private const val REPORT_LOG_LINE_CHARS = 200
-
-/**
- * Where the log is written for the share sheet.
- *
- * The cache, because the file provider already hands that directory out - see [Diag.write] for
- * why the log cannot be exported where the screen saves it and shared from there - and because a
- * file that exists to be handed to another app once has no business outliving the report.
- */
-private const val REPORT_LOG_FILE = "shizuku-log.txt"
-
-private const val TAG = "BugReportDialog"
 
 class BugReportDialog : DialogFragment() {
 
@@ -159,48 +146,16 @@ class BugReportDialog : DialogFragment() {
     /**
      * The whole log, handed to whatever the reporter picks so they can attach it.
      *
-     * Written on IO and shared from the result: the window can hold a day of lines and this runs
-     * from a tap, so the write cannot be on the main thread. A failure is said out loud rather
-     * than swallowed: a button that appears to do nothing is worse than one that reports it could
-     * not write the file, and [R.string.bug_report_dialog_share_log_failed] is the only thing that
-     * can tell the two apart.
+     * [shareAppLog] does the writing and the sharing, and the same call is behind the Log screen's
+     * own Share - one implementation, so what a report attaches and what the screen sends cannot
+     * be two different things. What this adds is only what to say when it cannot: a button that
+     * appears to do nothing is worse than one that reports it could not.
      */
     private fun shareLog() {
         lifecycleScope.launch {
             val context = context ?: return@launch
-
-            val file = withContext(Dispatchers.IO) {
-                File(context.cacheDir, REPORT_LOG_FILE).takeIf { Diag.write(it) }
-            }
-            if (file == null) {
-                Toast.makeText(
-                    context,
-                    R.string.bug_report_dialog_share_log_failed,
-                    Toast.LENGTH_SHORT
-                ).show()
-                return@launch
-            }
-
-            runCatching {
-                val uri = FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    file
-                )
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    putExtra(Intent.EXTRA_SUBJECT, file.name)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                context.startActivity(Intent.createChooser(intent, null))
-            }.onFailure {
-                Diag.warn(TAG, "could not share the log", it)
-                Toast.makeText(
-                    context,
-                    R.string.bug_report_dialog_share_log_failed,
-                    Toast.LENGTH_SHORT
-                ).show()
+            if (!shareAppLog(context)) {
+                Toast.makeText(context, R.string.log_share_failed, Toast.LENGTH_SHORT).show()
             }
         }
     }

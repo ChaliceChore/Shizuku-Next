@@ -322,6 +322,7 @@
     <string name="log_cleared">Log cleared</string>
     <string name="log_saved">Saved as %1$s, in the app folder on shared storage</string>
     <string name="log_nothing_to_save">Nothing to save.</string>
+    <string name="log_share_failed">Could not share the log</string>
     <string name="log_pulled">%1$d lines pulled from logcat</string>
     <string name="log_tab_app">This app</string>
     <string name="log_tab_capture">Record</string>
@@ -733,7 +734,6 @@
     <string name="bug_report_dialog_body_prompt">Please describe the bug. Include steps to reproduce if possible, as well as any relevant images/logs.</string>
     <string name="bug_report_dialog_log_note">Log (last %1$d lines):</string>
     <string name="bug_report_dialog_share_log">Share the log</string>
-    <string name="bug_report_dialog_share_log_failed">Could not write the log</string>
 
     <!-- Snackbar -->
     <string name="snackbar_battery_optimization_settings">Turn off battery optimization to use this feature.</string>

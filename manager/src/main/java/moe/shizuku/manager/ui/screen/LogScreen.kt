@@ -1,7 +1,6 @@
 package moe.shizuku.manager.ui.screen
 
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageInfo
 import android.widget.Toast
 import androidx.compose.foundation.clickable
@@ -71,7 +70,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -89,6 +87,8 @@ import moe.shizuku.manager.ui.component.appLabel
 import moe.shizuku.manager.utils.Diag
 import moe.shizuku.manager.utils.ShizukuStateMachine
 import moe.shizuku.manager.utils.runShellCommand
+import moe.shizuku.manager.utils.shareAppLog
+import moe.shizuku.manager.utils.shareFile
 
 /** Which lines the list is showing. */
 private enum class LogFilter { ALL, PROBLEMS, CRASHES }
@@ -265,6 +265,24 @@ private fun AppLogTab(bottomPadding: Dp) {
                 }
             ) {
                 Icon(Icons.Outlined.SaveAlt, contentDescription = stringResource(R.string.log_save))
+            }
+            // The whole day of lines, not the tail a report carries: somebody looking at the lines
+            // that matter should be able to send them on from here, without opening the report
+            // dialog to do it.
+            IconButton(
+                onClick = {
+                    scope.launch {
+                        if (!shareAppLog(context)) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.log_share_failed),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                }
+            ) {
+                Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.log_session_share))
             }
             IconButton(
                 onClick = {
@@ -519,7 +537,7 @@ private fun SavedTab(bottomPadding: Dp) {
                 }
                 Text(open.file.name, style = MaterialTheme.typography.titleSmall, maxLines = 1)
                 Box(modifier = Modifier.weight(1f))
-                IconButton(onClick = { share(context, open) }) {
+                IconButton(onClick = { shareFile(context, open.file) }) {
                     Icon(Icons.Outlined.Share, contentDescription = stringResource(R.string.log_session_share))
                 }
             }
@@ -541,7 +559,7 @@ private fun SavedTab(bottomPadding: Dp) {
                 SessionRow(
                     session = session,
                     onOpen = { viewing = session },
-                    onShare = { share(context, session) },
+                    onShare = { shareFile(context, session.file) },
                     onDelete = {
                         scope.launch {
                             val done = withContext(Dispatchers.IO) { Logcat.delete(session) }
@@ -849,20 +867,3 @@ private fun sizeText(bytes: Long): String = when {
     else -> "$bytes B"
 }
 
-/** Hands a capture to whatever the user picks, which is what a log is for. */
-private fun share(context: Context, session: Logcat.Session) {
-    runCatching {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            session.file
-        )
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            putExtra(Intent.EXTRA_SUBJECT, session.file.name)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, null))
-    }.onFailure { Diag.warn(AppConstants.TAG, "could not share the capture", it) }
-}
