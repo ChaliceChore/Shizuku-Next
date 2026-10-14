@@ -10,15 +10,12 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import com.reandroid.apk.ApkModule
-import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
-import com.reandroid.arsc.chunk.xml.ResXmlElement
 import com.reandroid.archive.FileInputSource
-import java.util.function.Predicate
 import moe.shizuku.manager.R
 import moe.shizuku.manager.ShizukuApplication
 import moe.shizuku.manager.utils.STUB_DEX_ASSET
 import moe.shizuku.manager.utils.renameHiddenCopy
-import moe.shizuku.manager.utils.rewrittenPackageReference
+import moe.shizuku.manager.utils.renamePackage
 import moe.shizuku.manager.utils.stubApkModule
 import moe.shizuku.manager.utils.ApkSigner
 import java.io.File
@@ -58,7 +55,6 @@ fun File.changePackageName(
 
     Log.i(TAG, "Changing package name")
     val oldPkgName = manifest.packageName
-    manifest.packageName = newPkgName
 
     // Renaming the package renames the app but not everything it is called by. Intent filter
     // actions (`<pkg>.START`, `.STOP`, the watchdog actions, the two request actions), the
@@ -66,9 +62,11 @@ fun File.changePackageName(
     // manifest that carry the old name, and leaving them is what makes a hidden copy unreachable:
     // its own actions match no filter, and the actions that do match are rejected by code that
     // compares against the runtime package name (issue #86). Authorities used to be the only one
-    // handled here; the walk below does all of them, and is what makes the copy whole.
+    // handled here; the walk below does all of them, and is what makes the copy whole. The new
+    // name goes on in [renamePackage], after that walk, and not here before it: see there for what
+    // writing it first did to every hidden copy (issue #94).
     Log.i(TAG, "Rewriting what the package name is written into")
-    val rewritten = manifest.rewritePackageReferences(oldPkgName, newPkgName)
+    val rewritten = manifest.renamePackage(oldPkgName, newPkgName)
     Log.i(TAG, "Rewrote $rewritten manifest values that carried $oldPkgName")
 
     // The name the copy is listed under, when the user asked for one - and after the rewrite, not
@@ -86,44 +84,6 @@ fun File.changePackageName(
 
     val outFile = File(workDir, "signed.apk")
     return module.buildAndSign(outFile)
-}
-
-/**
- * Every value in [this] manifest that names [oldPackage], rewritten to [newPackage], and how many
- * were rewritten.
- *
- * Walks the whole document rather than a list of known tags: the strings that carry a package name
- * sit at every level - the permission at the root, the components under `application`, the actions
- * inside their `intent-filter` children - and a new one added later should not have to be added
- * here as well. Nothing but string attribute values is touched.
- */
-private fun AndroidManifestBlock.rewritePackageReferences(oldPackage: String, newPackage: String): Int {
-    fun walk(element: ResXmlElement): Int {
-        var count = 0
-
-        for (index in 0 until element.attributeCount) {
-            val attribute = element.getAttributeAt(index)
-            val value = attribute.valueAsString ?: continue
-
-            val rewritten = rewrittenPackageReference(value, oldPackage, newPackage)
-                ?: continue
-            attribute.setValueAsString(rewritten)
-            count++
-        }
-
-        // The generic child iterator is the only one that can name what it returns, because the base
-        // class holding the no-argument version is not public; a predicate that accepts everything
-        // says the same thing.
-        val children = ArrayList<ResXmlElement>()
-        element.getElements(Predicate { true }).forEachRemaining { children.add(it) }
-        return children.fold(count) { total, child -> total + walk(child) }
-    }
-
-    // The document's own children are the root elements: the permission this app declares, the
-    // application, and the uses-permission list. That accessor is the raw one, hence the cast.
-    val roots = ArrayList<ResXmlElement>()
-    getElements().forEachRemaining { element -> roots.add(element as ResXmlElement) }
-    return roots.fold(0) { total, root -> total + walk(root) }
 }
 
 /**

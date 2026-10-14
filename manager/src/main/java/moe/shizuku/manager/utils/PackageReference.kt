@@ -1,6 +1,8 @@
 package moe.shizuku.manager.utils
 
 import com.reandroid.arsc.chunk.xml.AndroidManifestBlock
+import com.reandroid.arsc.chunk.xml.ResXmlElement
+import java.util.function.Predicate
 
 /**
  * [value] with a leading [oldPackage] replaced by [newPackage], or null when this value has nothing
@@ -55,3 +57,70 @@ fun AndroidManifestBlock.renameHiddenCopy(requested: String?): Boolean {
  */
 fun displayNameToKeep(currentLabel: String, appName: String): String? =
     currentLabel.takeIf { it != appName }
+
+/**
+ * [this] manifest renamed to [newPackageName]: its `package` attribute set, and every value that
+ * named [oldPackageName] rewritten to the new name. Returns how many values were rewritten.
+ *
+ * Both steps are here, in this order, rather than at the call site, because the order is the whole
+ * of it. [rewritePackageReferences] walks from the manifest element itself, so `package` is one of
+ * the values it visits; writing the new name before the walk made the walk rewrite it a second time
+ * whenever the new name begins with the old one followed by a dot - which is every name a hidden
+ * copy gets, since it is the old one with a suffix on the end. `moe.shizuku.privileged.api` plus
+ * `.v19r8` built a copy named `moe.shizuku.privileged.api.v19r8.v19r8`, whose provider authorities
+ * still named the running copy, so the platform refused it as INSTALL_FAILED_CONFLICTING_PROVIDER:
+ * issue #94, where a hidden copy could neither be made nor updated. Writing the `package` attribute
+ * last is what keeps the name written once.
+ *
+ * It lives here, beside the rule, rather than in the file that signs and installs the APK, because
+ * this is the whole of it: an `AndroidManifestBlock` in and an `AndroidManifestBlock` out, with no
+ * Android under it, which is how a test can drive it on the JVM alone.
+ */
+internal fun AndroidManifestBlock.renamePackage(
+    oldPackageName: String,
+    newPackageName: String,
+): Int {
+    val rewritten = rewritePackageReferences(oldPackageName, newPackageName)
+    packageName = newPackageName
+    return rewritten
+}
+
+/**
+ * Every value in [this] manifest that names [oldPackage], rewritten to [newPackage], and how many
+ * were rewritten.
+ *
+ * Walks the whole document rather than a list of known tags: the strings that carry a package name
+ * sit at every level - the permission at the root, the components under `application`, the actions
+ * inside their `intent-filter` children - and a new one added later should not have to be added
+ * here as well. Nothing but string attribute values is touched.
+ */
+private fun AndroidManifestBlock.rewritePackageReferences(oldPackage: String, newPackage: String): Int {
+    fun walk(element: ResXmlElement): Int {
+        var count = 0
+
+        for (index in 0 until element.attributeCount) {
+            val attribute = element.getAttributeAt(index)
+            val value = attribute.valueAsString ?: continue
+
+            val rewritten = rewrittenPackageReference(value, oldPackage, newPackage)
+                ?: continue
+            attribute.setValueAsString(rewritten)
+            count++
+        }
+
+        // The generic child iterator is the only one that can name what it returns, because the base
+        // class holding the no-argument version is not public; a predicate that accepts everything
+        // says the same thing.
+        val children = ArrayList<ResXmlElement>()
+        element.getElements(Predicate { true }).forEachRemaining { children.add(it) }
+        return children.fold(count) { total, child -> total + walk(child) }
+    }
+
+    // `getElements()` yields the document element itself, the `<manifest>`, and not what it holds -
+    // which reads backwards, and is why the walk covers the manifest's own `package` attribute as
+    // well. [renamePackage] writes that one last for exactly that reason. The accessor is the raw
+    // one, hence the cast.
+    val roots = ArrayList<ResXmlElement>()
+    getElements().forEachRemaining { element -> roots.add(element as ResXmlElement) }
+    return roots.fold(0) { total, root -> total + walk(root) }
+}
