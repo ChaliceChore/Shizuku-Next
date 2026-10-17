@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
@@ -27,8 +28,14 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import moe.shizuku.manager.ui.theme.LocalTelevision
 
@@ -188,4 +195,27 @@ fun Modifier.televisionFocusableRow(): Modifier {
     return this
         .focusable(interactionSource = interactions)
         .indication(interactions, ripple())
+}
+
+/**
+ * On a TV, right on this item moves the focus onto the controls inside it.
+ *
+ * A card that is a button of its own can hold buttons of its own too - a module's switch and its
+ * actions, a module's install button. A remote moves only to what lies past the edge of the
+ * focused item, and those lie within it, so with the card focused no press reached them. Right
+ * is that press here: it enters the card, and back leaves it again. Where the card holds nothing
+ * that can take focus, right does what it always did. Put it before the card's own clickable.
+ * Off a TV it is nothing.
+ */
+@Composable
+fun Modifier.televisionEnterOnRight(): Modifier {
+    if (!LocalTelevision.current) return this
+    val focusManager = LocalFocusManager.current
+    var focused by remember { mutableStateOf(false) }
+    return this
+        .onPreviewKeyEvent { event ->
+            focused && event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight &&
+                focusManager.moveFocus(FocusDirection.Enter)
+        }
+        .onFocusChanged { focused = it.isFocused }
 }

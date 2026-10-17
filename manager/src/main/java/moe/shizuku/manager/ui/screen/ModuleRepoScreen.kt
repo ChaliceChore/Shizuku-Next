@@ -2,15 +2,6 @@ package moe.shizuku.manager.ui.screen
 
 import android.graphics.BitmapFactory
 import android.widget.Toast
-import moe.shizuku.manager.ui.theme.LocalTelevision
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -55,6 +46,7 @@ import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import moe.shizuku.manager.ui.component.RefreshBox
 import moe.shizuku.manager.ui.component.TelevisionRefreshButton
+import moe.shizuku.manager.ui.component.televisionEnterOnRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -354,32 +346,14 @@ private fun ModuleRepoCard(
 
     val zip = release?.moduleZip
 
-    // The install button sits inside the card, and the card is a button of its own. A remote
-    // moves only to what lies past the edge of the focused item, and the install button lies
-    // within it, so with the card focused there was no press that reached the button. On a TV,
-    // right from the card is that press.
-    val television = LocalTelevision.current
-    val installButton = remember { FocusRequester() }
-    var cardFocused by remember { mutableStateOf(false) }
-    val canInstall = zip != null && !installing
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.large)
             // Invisible on the black theme without it: see Modifier.cardOutline.
             .cardOutline()
-            .onPreviewKeyEvent { event ->
-                if (television && cardFocused && canInstall &&
-                    event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight
-                ) {
-                    installButton.requestFocus()
-                    true
-                } else {
-                    false
-                }
-            }
-            .onFocusChanged { cardFocused = it.isFocused }
+            // The install button sits inside the card, which is a button of its own.
+            .televisionEnterOnRight()
             .clickable(onClick = onOpen)
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
@@ -462,10 +436,8 @@ private fun ModuleRepoCard(
 
                     Button(
                         onClick = { zip?.let { onInstall(it.url) } },
-                        modifier = Modifier
-                            .defaultMinSize(52.dp, 32.dp)
-                            .focusRequester(installButton),
-                        enabled = canInstall,
+                        modifier = Modifier.defaultMinSize(52.dp, 32.dp),
+                        enabled = zip != null && !installing,
                         shape = ButtonDefaults.textShape,
                         contentPadding = ButtonDefaults.TextButtonContentPadding
                     ) {

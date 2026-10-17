@@ -66,6 +66,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import moe.shizuku.manager.ui.component.RefreshBox
 import moe.shizuku.manager.ui.component.TelevisionRefreshButton
+import moe.shizuku.manager.ui.component.televisionEnterOnRight
 import moe.shizuku.manager.ui.component.televisionFocusShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -799,6 +800,9 @@ private fun ModuleCard(
             // Otherwise invisible on the black theme, where the card and the page are the same
             // colour: the same hairline the app's own cards draw.
             .cardOutline()
+            // The switch and, once expanded, the actions sit inside the card, which is a button
+            // of its own.
+            .televisionEnterOnRight()
             // Their gesture for the trust action: a long press reveals it, another hides it.
             .combinedClickable(
                 onClick = onExpandToggle,
