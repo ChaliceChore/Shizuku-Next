@@ -63,7 +63,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import moe.shizuku.manager.ui.component.RefreshBox
+import moe.shizuku.manager.ui.component.TelevisionRefreshButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -297,6 +298,14 @@ fun ModulesScreen(
         }
     }
 
+    val refresh: () -> Unit = {
+        refreshing = true
+        scope.launch {
+            refreshNow()
+            refreshing = false
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             TopAppBar(
@@ -323,6 +332,7 @@ fun ModulesScreen(
                 },
                 windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 actions = {
+                    TelevisionRefreshButton(refreshing, refresh)
                     if (searching) {
                         IconButton(onClick = { searching = false; query = "" }) {
                             Icon(Icons.Filled.Close, contentDescription = null)
@@ -409,15 +419,9 @@ fun ModulesScreen(
 
             // Their pull-to-refresh: a module is somebody else's file, and it changes from
             // outside as often as from here.
-            PullToRefreshBox(
+            RefreshBox(
                 isRefreshing = refreshing,
-                onRefresh = {
-                    refreshing = true
-                    scope.launch {
-                        refreshNow()
-                        refreshing = false
-                    }
-                }
+                onRefresh = refresh
             ) {
             LazyColumn(
                 contentPadding = PaddingValues(

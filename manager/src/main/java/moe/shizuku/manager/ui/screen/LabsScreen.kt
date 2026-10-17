@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -70,6 +71,7 @@ import moe.shizuku.manager.manage.PackageTools
 import moe.shizuku.manager.ui.Detail
 import moe.shizuku.manager.utils.MoreApps
 import moe.shizuku.manager.ui.theme.LocalAmoledTheme
+import moe.shizuku.manager.ui.theme.LocalTelevision
 
 /** Padding above, below and beside the tile's contents. */
 private val TilePadding = 10.dp
@@ -208,7 +210,11 @@ fun LabsScreen(bottomPadding: Dp, onOpenDetail: (Detail) -> Unit) {
             // The cost is real and is paid in the tiles: at three across a phone a tile is about
             // 120dp, so a name like "Hide wireless debugging" has nowhere to sit on one line and
             // has to stack. The tile below is built for that.
-            columns = GridCells.Fixed(3),
+            //
+            // Five on a TV. Every part of a tile is a fraction of its width, so three across a
+            // TV's wider page made tiles so large that two rows filled the screen and the rest of
+            // the grid was a long walk down with the remote.
+            columns = GridCells.Fixed(if (LocalTelevision.current) 5 else 3),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
                 start = 16.dp,
@@ -329,6 +335,9 @@ private fun LabTile(
                 // The sum of the parts, so every tile in the grid is the same height whatever its
                 // name runs to - a grid whose rows differ in height does not read as a grid.
                 .height(TilePadding * 2 + plate + PlateGap + labelHeight)
+                // Clipped first, so the press and focus layers take the tile's rounded shape
+                // instead of showing square corners past it.
+                .clip(MaterialTheme.shapes.large)
                 .clickable(onClick = onClick)
                 .then(
                     if (LocalAmoledTheme.current) {

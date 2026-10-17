@@ -44,7 +44,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import moe.shizuku.manager.ui.component.RefreshBox
+import moe.shizuku.manager.ui.component.TelevisionRefreshButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -135,6 +136,14 @@ fun ModuleRepoScreen(
         matched.sortedWith(sort.order())
     }
 
+    val refresh: () -> Unit = {
+        refreshing = true
+        scope.launch {
+            load()
+            refreshing = false
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = {
@@ -165,6 +174,7 @@ fun ModuleRepoScreen(
                 }
             },
             actions = {
+                TelevisionRefreshButton(refreshing, refresh)
                 if (searching) {
                     IconButton(onClick = { searching = false; query = "" }) {
                         Icon(Icons.Filled.Close, contentDescription = null)
@@ -256,15 +266,9 @@ fun ModuleRepoScreen(
             }
 
             else -> {
-                PullToRefreshBox(
+                RefreshBox(
                     isRefreshing = refreshing,
-                    onRefresh = {
-                        refreshing = true
-                        scope.launch {
-                            load()
-                            refreshing = false
-                        }
-                    }
+                    onRefresh = refresh
                 ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),

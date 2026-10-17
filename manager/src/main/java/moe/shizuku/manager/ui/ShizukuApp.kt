@@ -95,6 +95,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.R
+import moe.shizuku.manager.ui.component.televisionFocusOutline
 import moe.shizuku.manager.ui.screen.AppsScreen
 import moe.shizuku.manager.ui.screen.ActivitiesScreen
 import moe.shizuku.manager.ui.screen.FilesScreen
@@ -253,6 +254,7 @@ fun ShizukuApp() {
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
+                    .televisionFocusOutline()
             ) {
                 // Both the open detail and the pager live here, above the switch between
                 // the two, for two reasons: the pager used to be remembered inside the tab
@@ -729,6 +731,7 @@ private fun TelevisionTabs(
 ) {
     var grantedCount by remember { mutableIntStateOf(0) }
     val railItems = remember { List(tabs.size) { FocusRequester() } }
+    val page = remember { FocusRequester() }
 
     // Back from a page goes to the rail first, the way a TV app's back does: left only gets
     // there once nothing on the page is further left, which on a wide page can be a while.
@@ -751,9 +754,17 @@ private fun TelevisionTabs(
                 // press down on the page could land on whichever tab sat level with it rather
                 // than on the next thing below; and coming back to the rail lands on the tab
                 // that is open, not on whichever tab was level with the focus.
+                //
+                // Going right lands on the page's first item rather than on whatever sat level
+                // with the tab: from Settings, the fifth tab, that was the fourth setting down.
                 .focusProperties {
                     onEnter = { railItems[selected].requestFocus() }
-                    onExit = { if (requestedFocusDirection.isVertical) cancelFocusChange() }
+                    onExit = {
+                        when {
+                            requestedFocusDirection.isVertical -> cancelFocusChange()
+                            requestedFocusDirection == FocusDirection.Right -> page.requestFocus()
+                        }
+                    }
                 }
                 .focusGroup(),
             containerColor = Color.Transparent
@@ -764,7 +775,12 @@ private fun TelevisionTabs(
                 NavigationRailItem(
                     selected = isSelected,
                     onClick = { onSelect(index) },
-                    modifier = Modifier.focusRequester(railItems[index]),
+                    // A tab opens as the focus reaches it, the way a TV app's tabs do: moving
+                    // through the rail is already the choice, and OK on top of it was a second
+                    // press for nothing.
+                    modifier = Modifier
+                        .focusRequester(railItems[index])
+                        .onFocusChanged { if (it.isFocused) onSelect(index) },
                     icon = {
                         BadgedBox(
                             badge = {
@@ -793,6 +809,8 @@ private fun TelevisionTabs(
                 .weight(1f)
                 .padding(end = TelevisionSafeHorizontal)
                 .onFocusChanged { pageFocused = it.hasFocus }
+                // Asked for as a whole, a group hands focus to its first item.
+                .focusRequester(page)
                 .focusProperties {
                     onExit = { if (requestedFocusDirection.isVertical) cancelFocusChange() }
                 }

@@ -39,7 +39,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import moe.shizuku.manager.ui.component.RefreshBox
+import moe.shizuku.manager.ui.component.TelevisionRefreshButton
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -234,6 +235,14 @@ fun ManageScreen(
         return
     }
 
+    val refresh: () -> Unit = {
+        refreshing = true
+        // The hidden set is worked out per list, so a re-read has to ask for it
+        // again too: a pull is how you pick up an app installed elsewhere.
+        derivedFor = -1
+        refreshKey++
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
             title = { Text(stringResource(R.string.tab_manage)) },
@@ -251,6 +260,7 @@ fun ManageScreen(
                 }
             },
             actions = {
+                TelevisionRefreshButton(refreshing, refresh)
                 IconButton(onClick = { sortMenu = true }) {
                     Icon(Icons.Filled.Sort, contentDescription = null)
                 }
@@ -331,15 +341,9 @@ fun ManageScreen(
             )
         )
 
-        PullToRefreshBox(
+        RefreshBox(
             isRefreshing = refreshing,
-            onRefresh = {
-                refreshing = true
-                // The hidden set is worked out per list, so a re-read has to ask for it
-                // again too: a pull is how you pick up an app installed elsewhere.
-                derivedFor = -1
-                refreshKey++
-            },
+            onRefresh = refresh,
             modifier = Modifier.fillMaxSize()
         ) {
             LazyColumn(
