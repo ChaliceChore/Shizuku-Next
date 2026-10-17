@@ -151,13 +151,17 @@ fun SegmentedListItem(
         stringResource(if (switchState) R.string.state_on else R.string.state_off)
     } else null
 
+    // On a TV a row's focused fill spans the whole width, which says where the focus is without
+    // an outline around it; and a row with nothing to do still takes focus there, so the D-pad
+    // can walk down a list that is only for reading.
+    val focusShape = dimmed.televisionFocusShape(null)
     val clickable = when {
-        rowClick != null && stateText != null -> dimmed
+        rowClick != null && stateText != null -> focusShape
             .clickable(enabled = enabled, onClick = rowClick)
             .semantics { stateDescription = stateText }
 
-        rowClick != null -> dimmed.clickable(enabled = enabled, onClick = rowClick)
-        else -> dimmed
+        rowClick != null -> focusShape.clickable(enabled = enabled, onClick = rowClick)
+        else -> focusShape.televisionFocusableRow()
     }
 
     val resolvedTrailing: (@Composable () -> Unit)? = if (switchState != null) {

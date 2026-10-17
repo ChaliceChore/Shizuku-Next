@@ -71,6 +71,7 @@ import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
@@ -95,7 +96,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import moe.shizuku.manager.R
-import moe.shizuku.manager.ui.component.televisionFocusOutline
+import moe.shizuku.manager.ui.component.TelevisionFocusOutline
+import moe.shizuku.manager.ui.component.televisionFocusShape
 import moe.shizuku.manager.ui.screen.AppsScreen
 import moe.shizuku.manager.ui.screen.ActivitiesScreen
 import moe.shizuku.manager.ui.screen.FilesScreen
@@ -248,13 +250,13 @@ fun ShizukuApp() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
+            TelevisionFocusOutline {
             // Apply the status bar inset exactly once for every screen: the app
             // bars themselves have no insets, and the Scaffold opts out too.
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.statusBars.only(WindowInsetsSides.Top))
-                    .televisionFocusOutline()
             ) {
                 // Both the open detail and the pager live here, above the switch between
                 // the two, for two reasons: the pager used to be remembered inside the tab
@@ -390,6 +392,7 @@ fun ShizukuApp() {
                         )
                     }
                 }
+            }
             }
         }
     }
@@ -738,7 +741,30 @@ private fun TelevisionTabs(
     // From the rail, back leaves the app as it always has. A page's own back - a module's full
     // screen - is composed after this one, so it still comes first.
     var pageFocused by remember { mutableStateOf(false) }
-    BackHandler(enabled = pageFocused) { railItems[selected].requestFocus() }
+
+    // Whether the focus was last on the page rather than the rail, and whether it is leaving
+    // the page because it was sent - left, or back. A page can take away the thing that held
+    // the focus: Find modules opens over the Modules list, and the button that opened it is
+    // gone. The platform then gives the focus to the first thing it finds, which is the rail,
+    // and the next press down moved on from the open tab to the next one. So focus that turns
+    // up on the rail without having been sent there is given back to the page, once the frame
+    // that changed the page is over, at whatever is now first on it.
+    var focusOnPage by remember { mutableStateOf(false) }
+    var leavingPage by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val returnToPage: () -> Unit = {
+        scope.launch {
+            // Two frames: one for the old item to go, one for what replaces it.
+            withFrameNanos {}
+            withFrameNanos {}
+            if (focusOnPage && !pageFocused) page.requestFocus()
+        }
+    }
+
+    BackHandler(enabled = pageFocused) {
+        leavingPage = true
+        railItems[selected].requestFocus()
+    }
 
     Row(
         modifier = Modifier
@@ -758,7 +784,10 @@ private fun TelevisionTabs(
                 // Going right lands on the page's first item rather than on whatever sat level
                 // with the tab: from Settings, the fifth tab, that was the fourth setting down.
                 .focusProperties {
-                    onEnter = { railItems[selected].requestFocus() }
+                    onEnter = {
+                        if (requestedFocusDirection == FocusDirection.Left) leavingPage = true
+                        railItems[selected].requestFocus()
+                    }
                     onExit = {
                         when {
                             requestedFocusDirection.isVertical -> cancelFocusChange()
@@ -778,9 +807,22 @@ private fun TelevisionTabs(
                     // A tab opens as the focus reaches it, the way a TV app's tabs do: moving
                     // through the rail is already the choice, and OK on top of it was a second
                     // press for nothing.
+                    // No outline on the rail: the selected tab's pill already marks it, and with
+                    // the tab following the focus the two are always the same tab.
                     modifier = Modifier
                         .focusRequester(railItems[index])
-                        .onFocusChanged { if (it.isFocused) onSelect(index) },
+                        .onFocusChanged {
+                            if (!it.isFocused) return@onFocusChanged
+                            if (focusOnPage && !leavingPage) {
+                                // Taken by the rail rather than sent to it: see focusOnPage.
+                                returnToPage()
+                            } else {
+                                focusOnPage = false
+                                onSelect(index)
+                            }
+                            leavingPage = false
+                        }
+                        .televisionFocusShape(null),
                     icon = {
                         BadgedBox(
                             badge = {
@@ -808,7 +850,17 @@ private fun TelevisionTabs(
             modifier = Modifier
                 .weight(1f)
                 .padding(end = TelevisionSafeHorizontal)
-                .onFocusChanged { pageFocused = it.hasFocus }
+                .onFocusChanged {
+                    pageFocused = it.hasFocus
+                    if (it.hasFocus) {
+                        focusOnPage = true
+                    } else if (focusOnPage) {
+                        // Lost to nothing at all, which a page can also do: given back the same
+                        // way. Focus that went to the rail on purpose has cleared focusOnPage by
+                        // the time this looks.
+                        returnToPage()
+                    }
+                }
                 // Asked for as a whole, a group hands focus to its first item.
                 .focusRequester(page)
                 .focusProperties {

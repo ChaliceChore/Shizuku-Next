@@ -52,6 +52,7 @@ fun Modifier.televisionTextInput(shape: Shape = RectangleShape): Modifier {
     }
     return this
         .clip(shape)
+        .televisionFocusShape(shape)
         .focusRequester(item)
         .clickable { editing = true }
         .onPreviewKeyEvent { event ->
