@@ -121,6 +121,9 @@ fun SegmentedListItem(
     leadingContent: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
+    // False for a row whose [modifier] already makes it clickable, so a TV does not give it a
+    // second focus stop on top of the one its own clickable brings.
+    focusableOnTelevision: Boolean = true,
     enabled: Boolean = true,
     // Centres every slot on the row rather than letting Material place them. Material aligns
     // the leading and trailing slots with the headline as soon as the supporting text wraps,
@@ -161,7 +164,8 @@ fun SegmentedListItem(
             .semantics { stateDescription = stateText }
 
         rowClick != null -> focusShape.clickable(enabled = enabled, onClick = rowClick)
-        else -> focusShape.televisionFocusableRow()
+        focusableOnTelevision -> focusShape.televisionFocusableRow()
+        else -> focusShape
     }
 
     val resolvedTrailing: (@Composable () -> Unit)? = if (switchState != null) {

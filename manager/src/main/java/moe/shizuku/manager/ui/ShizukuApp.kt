@@ -742,6 +742,19 @@ private fun TelevisionTabs(
     // screen - is composed after this one, so it still comes first.
     var pageFocused by remember { mutableStateOf(false) }
 
+    // The tab follows the focus, so walking the rail from Home to Labs passes through Apps on
+    // the way - and Apps reads every installed package the moment it is active, a binder call
+    // that cannot be called back once it has started. It is let go only once the focus has
+    // stayed on Apps for a moment, the same way the phone's pager waits for the swipe to settle.
+    var appsActive by remember { mutableStateOf(false) }
+    LaunchedEffect(selected) {
+        appsActive = false
+        if (selected == 1) {
+            delay(300)
+            appsActive = true
+        }
+    }
+
     // Whether the focus was last on the page rather than the rail, and whether it is leaving
     // the page because it was sent - left, or back. A page can take away the thing that held
     // the focus: Find modules opens over the Modules list, and the button that opened it is
@@ -873,7 +886,7 @@ private fun TelevisionTabs(
                     0 -> HomeScreen(bottomPadding = 0.dp)
                     1 -> AppsScreen(
                         bottomPadding = 0.dp,
-                        active = true,
+                        active = appsActive,
                         warmUp = false,
                         onGrantedCount = { grantedCount = it }
                     )

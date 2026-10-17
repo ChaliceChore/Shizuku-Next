@@ -8,7 +8,6 @@ import moe.shizuku.manager.AppConstants
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -356,7 +355,7 @@ fun ManageScreen(
 
                     SegmentedCard {
                         SegmentedListItem(
-                            modifier = Modifier.clickable { openPackage = pi.packageName },
+                            onClick = { openPackage = pi.packageName },
                             leadingContent = {
                                 // A removed app has no icon to load the row keeps the
                                 // space so the labels stay aligned with the rest.

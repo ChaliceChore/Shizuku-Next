@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
+import moe.shizuku.manager.ui.component.televisionTextInput
 import moe.shizuku.manager.ui.component.RefreshBox
 import moe.shizuku.manager.ui.component.TelevisionRefreshButton
 import moe.shizuku.manager.ui.component.televisionEnterOnRight
@@ -154,7 +155,7 @@ fun ModuleRepoScreen(
                     TextField(
                         value = query,
                         onValueChange = { query = it },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().televisionTextInput(TextFieldDefaults.shape),
                         placeholder = { Text(stringResource(R.string.modules_search)) },
                         singleLine = true,
                         colors = TextFieldDefaults.colors(

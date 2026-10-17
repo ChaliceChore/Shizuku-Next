@@ -1,5 +1,6 @@
 package moe.shizuku.manager.ui.component
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +51,14 @@ fun Modifier.televisionTextInput(shape: Shape = RectangleShape): Modifier {
     LaunchedEffect(editing) {
         if (editing) field.requestFocus()
     }
+    // Back as the system's back rather than as a key: from Android 13 an app that takes part in
+    // predictive back is not sent the back key at all, only the back callback. Registered after
+    // the tab rail's own back, so while the cursor is in the field this one is asked first. The
+    // keyboard takes the first back for itself; this is the one after it.
+    BackHandler(enabled = editing) {
+        editing = false
+        item.requestFocus()
+    }
     return this
         .clip(shape)
         .televisionFocusShape(shape)
@@ -60,12 +69,6 @@ fun Modifier.televisionTextInput(shape: Shape = RectangleShape): Modifier {
             when (event.key) {
                 Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
                 Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
-                // The keyboard takes the first back for itself; this is the one after it.
-                Key.Back -> {
-                    editing = false
-                    item.requestFocus()
-                    true
-                }
                 else -> false
             }
         }
