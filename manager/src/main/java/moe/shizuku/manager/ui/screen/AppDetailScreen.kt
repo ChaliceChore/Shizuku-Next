@@ -487,6 +487,8 @@ fun AppDetailScreen(
                                     supportingContent = { Text(stringResource(R.string.app_battery_unrestricted_note)) },
                                     trailingContent = {
                                         ExpressiveSwitch(
+                                            // Keeps a TV's focus while busy or locked.
+                                            focusableWhenDisabled = true,
                                             checked = app.batteryUnrestricted,
                                             enabled = !busy,
                                             onCheckedChange = { checked ->
@@ -522,6 +524,8 @@ fun AppDetailScreen(
                                     supportingContent = { Text(stringResource(R.string.app_network_block_note)) },
                                     trailingContent = {
                                         ExpressiveSwitch(
+                                            // Keeps a TV's focus while busy or locked.
+                                            focusableWhenDisabled = true,
                                             checked = app.networkBlocked == true,
                                             enabled = !busy,
                                             onCheckedChange = { checked ->
@@ -678,6 +682,8 @@ private fun PermissionRow(
         supportingContent = { Text(supporting) },
         trailingContent = {
             ExpressiveSwitch(
+                // Keeps a TV's focus while busy or locked.
+                focusableWhenDisabled = true,
                 checked = permission.granted,
                 // A permission adb cannot change stays readable but not switchable; the
                 // row says why, so it does not look like a bug.
