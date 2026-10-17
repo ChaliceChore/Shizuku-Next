@@ -69,6 +69,7 @@ import moe.shizuku.manager.manage.ForceDark
 import moe.shizuku.manager.manage.Hiding
 import moe.shizuku.manager.manage.PackageTools
 import moe.shizuku.manager.ui.Detail
+import moe.shizuku.manager.ui.televisionReturnFocus
 import moe.shizuku.manager.utils.MoreApps
 import moe.shizuku.manager.ui.theme.LocalAmoledTheme
 import moe.shizuku.manager.ui.theme.LocalTelevision
@@ -231,6 +232,7 @@ fun LabsScreen(bottomPadding: Dp, onOpenDetail: (Detail) -> Unit) {
                         icon = entry.icon,
                         label = label,
                         active = entry.detail in active,
+                        modifier = Modifier.televisionReturnFocus(entry.detail),
                         onClick = {
                             // The index used to be somebody else's website and went to the
                             // browser; it is a list now, with the search, the sort and the
@@ -313,7 +315,8 @@ private fun LabTile(
     icon: ImageVector,
     label: String,
     active: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     BoxWithConstraints {
         // Every part is a fraction of the width the tile was given, and the height is what those
@@ -330,7 +333,7 @@ private fun LabTile(
         }
 
         Surface(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
                 // The sum of the parts, so every tile in the grid is the same height whatever its
                 // name runs to - a grid whose rows differ in height does not read as a grid.

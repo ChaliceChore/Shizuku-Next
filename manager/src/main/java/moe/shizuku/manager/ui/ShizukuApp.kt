@@ -60,6 +60,7 @@ import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -72,6 +73,7 @@ import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -281,6 +283,7 @@ fun ShizukuApp() {
                 // Whether a detail screen has been open, so the TV's tabs coming back after it
                 // put the focus on the page it was opened from rather than on the rail.
                 var tvDetailWasOpen by remember { mutableStateOf(false) }
+                val tvReturn = remember { TelevisionReturn() }
                 val current = detail
 
                 if (current != null) {
@@ -387,7 +390,11 @@ fun ShizukuApp() {
                         onSelect = { tvTab = it },
                         pages = pages,
                         focusPageFirst = tvDetailWasOpen,
-                        onOpenDetail = { detail = it }
+                        returnFocus = tvReturn,
+                        onOpenDetail = {
+                            tvReturn.detail = it
+                            detail = it
+                        }
                     )
                 } else {
                     pages.SaveableStateProvider(TAB_PAGES) {
@@ -737,6 +744,7 @@ private fun TelevisionTabs(
     onSelect: (Int) -> Unit,
     pages: SaveableStateHolder,
     focusPageFirst: Boolean,
+    returnFocus: TelevisionReturn,
     onOpenDetail: (Detail) -> Unit
 ) {
     var grantedCount by remember { mutableIntStateOf(0) }
@@ -791,7 +799,12 @@ private fun TelevisionTabs(
         withFrameNanos {}
         if (focusPageFirst) {
             focusOnPage = true
-            if (!page.requestFocus()) railItems[selected].requestFocus()
+            // A frame for the item that opened the detail to take the focus back itself (see
+            // televisionReturnFocus); the page's first item only if it could not. Either way the
+            // claim is over after this, so an item scrolled into view later cannot take it.
+            withFrameNanos {}
+            returnFocus.detail = null
+            if (!pageFocused && !page.requestFocus()) railItems[selected].requestFocus()
         } else {
             railItems[selected].requestFocus()
         }
@@ -905,6 +918,7 @@ private fun TelevisionTabs(
                 .focusGroup()
         ) {
             pages.SaveableStateProvider("$TAB_PAGES-$selected") {
+                CompositionLocalProvider(LocalTelevisionReturn provides returnFocus) {
                 when (selected) {
                     0 -> HomeScreen(bottomPadding = 0.dp)
                     1 -> AppsScreen(
@@ -923,9 +937,44 @@ private fun TelevisionTabs(
                     3 -> LabsScreen(bottomPadding = 0.dp, onOpenDetail = onOpenDetail)
                     4 -> SettingsScreen(bottomPadding = 0.dp, onOpenDetail = onOpenDetail)
                 }
+                }
             }
         }
     }
+}
+
+/**
+ * The detail screen the TV tabs last opened, until the tabs are back and the item that opened it
+ * has had its chance to take the focus again.
+ */
+class TelevisionReturn {
+    var detail: Detail? = null
+}
+
+private val LocalTelevisionReturn = staticCompositionLocalOf<TelevisionReturn?> { null }
+
+/**
+ * On a TV, the focus comes back to this item when the detail screen it opened closes.
+ *
+ * A detail screen takes the whole window, so the tab it was opened from leaves the composition
+ * and is built again on the way back. The page's first item taking the focus then is better than
+ * nothing taking it, but it is not where anyone was: back from Log landed on Activities Launcher,
+ * a row and four tiles away. Put this on the item that opens [detail], before its clickable.
+ * Off a TV it is nothing.
+ */
+@Composable
+fun Modifier.televisionReturnFocus(detail: Detail): Modifier {
+    val target = LocalTelevisionReturn.current ?: return this
+    val requester = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        // A frame for the page to be laid out, so the item is in place to be focused.
+        withFrameNanos {}
+        if (target.detail == detail) {
+            target.detail = null
+            requester.requestFocus()
+        }
+    }
+    return focusRequester(requester)
 }
 
 private val FocusDirection.isVertical: Boolean
