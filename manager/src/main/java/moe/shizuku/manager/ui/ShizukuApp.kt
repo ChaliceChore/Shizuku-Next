@@ -7,6 +7,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,6 +52,8 @@ import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ToggleButton
@@ -64,6 +67,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -71,6 +75,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -110,6 +119,7 @@ import moe.shizuku.manager.ui.screen.StealthScreen
 import moe.shizuku.manager.ui.screen.TerminalScreen
 import moe.shizuku.manager.ui.screen.WifiPasswordsScreen
 import moe.shizuku.manager.ui.theme.LocalAmoledTheme
+import moe.shizuku.manager.ui.theme.LocalTelevision
 import moe.shizuku.manager.ui.theme.ShizukuTheme
 
 /**
@@ -259,6 +269,10 @@ fun ShizukuApp() {
                 // state of the pages while they are gone, which is the same thing a navigation
                 // library does, and for the same reason.
                 val pages = rememberSaveableStateHolder()
+                // The tab a TV is on. Kept up here beside the pager for the same reason the
+                // pager is: a detail screen takes the tabs out of the composition, and the way
+                // back should land on the tab it left.
+                var tvTab by rememberSaveable { mutableIntStateOf(0) }
                 val current = detail
 
                 if (current != null) {
@@ -358,6 +372,13 @@ fun ShizukuApp() {
                             Detail.PERMISSIONS -> PermissionsScreen(onBack = { detail = null })
                         }
                     }
+                } else if (LocalTelevision.current) {
+                    TelevisionTabs(
+                        selected = tvTab,
+                        onSelect = { tvTab = it },
+                        pages = pages,
+                        onOpenDetail = { detail = it }
+                    )
                 } else {
                     pages.SaveableStateProvider(TAB_PAGES) {
                         MainTabs(
@@ -674,3 +695,132 @@ private fun MainTabs(
         }
     }
 }
+
+/**
+ * The overscan a TV may cut from every edge. Televisions are free to crop the picture, and the
+ * guidance for what is always safe to draw in is about five percent of the screen: 48dp at the
+ * sides and 27dp at the top and bottom of a 960 x 540dp screen.
+ */
+private val TelevisionSafeHorizontal = 48.dp
+private val TelevisionSafeVertical = 27.dp
+
+/**
+ * The tabs on a TV: the same five pages, with the bar as a column down the left edge instead
+ * of a row floating along the bottom.
+ *
+ * The floating bar is a thumb's bar. It hides as a page scrolls, which a remote has no gesture
+ * to undo, and it can only be reached by walking the focus down past everything on the page.
+ * A rail on the left is always there and always one press away: left from anywhere on a page.
+ *
+ * Only the selected page is composed. The phone keeps every page alive in the pager so that
+ * swiping is cheap, but a page that is composed is also a page the D-pad can move focus into,
+ * and on a TV it did: focus walked off the page on screen into one that was not, the pager
+ * followed it, and once it was stranded there the remote appeared to do nothing at all. With
+ * one page there is nowhere for focus to go but what is visible. Each page's scroll position
+ * is filed under its own key in [pages], so leaving a tab and coming back still lands where it
+ * was left.
+ */
+@Composable
+private fun TelevisionTabs(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    pages: SaveableStateHolder,
+    onOpenDetail: (Detail) -> Unit
+) {
+    var grantedCount by remember { mutableIntStateOf(0) }
+    val railItems = remember { List(tabs.size) { FocusRequester() } }
+
+    // Back from a page goes to the rail first, the way a TV app's back does: left only gets
+    // there once nothing on the page is further left, which on a wide page can be a while.
+    // From the rail, back leaves the app as it always has. A page's own back - a module's full
+    // screen - is composed after this one, so it still comes first.
+    var pageFocused by remember { mutableStateOf(false) }
+    BackHandler(enabled = pageFocused) { railItems[selected].requestFocus() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = TelevisionSafeVertical)
+    ) {
+        NavigationRail(
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(start = TelevisionSafeHorizontal - 24.dp)
+                // The rail and the page are two groups, and only left and right cross between
+                // them. The rail is close beside everything on the page, so without this a
+                // press down on the page could land on whichever tab sat level with it rather
+                // than on the next thing below; and coming back to the rail lands on the tab
+                // that is open, not on whichever tab was level with the focus.
+                .focusProperties {
+                    onEnter = { railItems[selected].requestFocus() }
+                    onExit = { if (requestedFocusDirection.isVertical) cancelFocusChange() }
+                }
+                .focusGroup(),
+            containerColor = Color.Transparent
+        ) {
+            Spacer(modifier = Modifier.weight(1f))
+            tabs.forEachIndexed { index, tab ->
+                val isSelected = selected == index
+                NavigationRailItem(
+                    selected = isSelected,
+                    onClick = { onSelect(index) },
+                    modifier = Modifier.focusRequester(railItems[index]),
+                    icon = {
+                        BadgedBox(
+                            badge = {
+                                if (index == 1 && grantedCount > 0) {
+                                    Badge(
+                                        containerColor = MaterialTheme.colorScheme
+                                            .primaryContainer
+                                    ) { Text(grantedCount.toString()) }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                if (isSelected) tab.selectedIcon else tab.unselectedIcon,
+                                contentDescription = null
+                            )
+                        }
+                    },
+                    label = { Text(stringResource(tab.label)) }
+                )
+            }
+            Spacer(modifier = Modifier.weight(1f))
+        }
+
+        CenteredContent(
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = TelevisionSafeHorizontal)
+                .onFocusChanged { pageFocused = it.hasFocus }
+                .focusProperties {
+                    onExit = { if (requestedFocusDirection.isVertical) cancelFocusChange() }
+                }
+                .focusGroup()
+        ) {
+            pages.SaveableStateProvider("$TAB_PAGES-$selected") {
+                when (selected) {
+                    0 -> HomeScreen(bottomPadding = 0.dp)
+                    1 -> AppsScreen(
+                        bottomPadding = 0.dp,
+                        active = true,
+                        warmUp = false,
+                        onGrantedCount = { grantedCount = it }
+                    )
+                    // The rail stays when a module opens one of its full screens: on a TV it
+                    // is the way to the other tabs, and it covers nothing of the module's.
+                    2 -> ModulesScreen(
+                        bottomPadding = 0.dp,
+                        active = true,
+                        onFullscreenChange = {}
+                    )
+                    3 -> LabsScreen(bottomPadding = 0.dp, onOpenDetail = onOpenDetail)
+                    4 -> SettingsScreen(bottomPadding = 0.dp, onOpenDetail = onOpenDetail)
+                }
+            }
+        }
+    }
+}
+
+private val FocusDirection.isVertical: Boolean
+    get() = this == FocusDirection.Up || this == FocusDirection.Down

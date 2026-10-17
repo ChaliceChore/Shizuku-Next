@@ -3,6 +3,7 @@ package moe.shizuku.manager.ui.screen
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.util.Log
+import moe.shizuku.manager.ui.component.televisionTextInput
 import moe.shizuku.manager.AppConstants
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
@@ -311,7 +312,8 @@ fun ManageScreen(
             onValueChange = { query = it },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .televisionTextInput(MaterialTheme.shapes.extraLarge),
             placeholder = { Text(stringResource(R.string.manage_search_hint)) },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             trailingIcon = {
