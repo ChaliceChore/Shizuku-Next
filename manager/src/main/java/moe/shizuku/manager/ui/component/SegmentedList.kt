@@ -121,8 +121,9 @@ fun SegmentedListItem(
     leadingContent: (@Composable () -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     onClick: (() -> Unit)? = null,
-    // False for a row whose [modifier] already makes it clickable, so a TV does not give it a
-    // second focus stop on top of the one its own clickable brings.
+    // False for a row that already has its own focus stop - a [modifier] that makes it clickable,
+    // or a control in [trailingContent] such as a switch - so a TV does not make the row a second
+    // stop that, being the outer one, would also keep the D-pad from reaching the control.
     focusableOnTelevision: Boolean = true,
     enabled: Boolean = true,
     // Centres every slot on the row rather than letting Material place them. Material aligns
@@ -157,6 +158,10 @@ fun SegmentedListItem(
     // On a TV a row's focused fill spans the whole width, which says where the focus is without
     // an outline around it; and a row with nothing to do still takes focus there, so the D-pad
     // can walk down a list that is only for reading.
+    //
+    // The no-outline mark goes only on a row that is itself the thing focused. On a row that is
+    // not, it would answer for whatever inside the row takes focus instead - its switch - and
+    // hide that control's outline.
     val focusShape = dimmed.televisionFocusShape(null)
     val clickable = when {
         rowClick != null && stateText != null -> focusShape
@@ -165,7 +170,7 @@ fun SegmentedListItem(
 
         rowClick != null -> focusShape.clickable(enabled = enabled, onClick = rowClick)
         focusableOnTelevision -> focusShape.televisionFocusableRow()
-        else -> focusShape
+        else -> dimmed
     }
 
     val resolvedTrailing: (@Composable () -> Unit)? = if (switchState != null) {

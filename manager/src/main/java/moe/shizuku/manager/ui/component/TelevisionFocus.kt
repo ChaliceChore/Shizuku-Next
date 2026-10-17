@@ -159,15 +159,20 @@ fun TelevisionFocusOutline(content: @Composable () -> Unit) {
 /**
  * Tells the TV focus outline what shape this item is, so the outline follows it; or, with
  * `null`, that it wants no outline at all - for rows whose focused fill already spans the width
- * and for the tab rail, whose selected pill says where the focus is. Put it before the item's
- * own clickable. Off a TV, or outside a [TelevisionFocusOutline], it is nothing.
+ * and for the tab rail, whose selected pill says where the focus is. Put it directly before the
+ * item's own clickable.
+ *
+ * It speaks for that item alone, so a button inside a row that wants no outline still gets one.
+ * [includeDescendants] widens it to whatever inside the item takes focus, for a wrapper whose
+ * focus is handed on to a child it draws - a text field, while the cursor is in it. Off a TV, or
+ * outside a [TelevisionFocusOutline], it is nothing.
  */
 @Composable
-fun Modifier.televisionFocusShape(shape: Shape?): Modifier {
+fun Modifier.televisionFocusShape(shape: Shape?, includeDescendants: Boolean = false): Modifier {
     val state = LocalFocusOutline.current ?: return this
     val token = remember { Any() }
     return onFocusChanged {
-        if (it.hasFocus) {
+        if (if (includeDescendants) it.hasFocus else it.isFocused) {
             state.owner = token
             state.shape = shape
             state.hidden = shape == null

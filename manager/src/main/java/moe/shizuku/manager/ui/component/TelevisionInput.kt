@@ -49,7 +49,9 @@ fun Modifier.televisionTextInput(shape: Shape = RectangleShape): Modifier {
     val item = remember { FocusRequester() }
     val field = remember { FocusRequester() }
     LaunchedEffect(editing) {
-        if (editing) field.requestFocus()
+        // A disabled field cannot take the focus, and then there is no editing to be in: left
+        // set, it would leave back answering for a field nobody is typing in.
+        if (editing && !field.requestFocus()) editing = false
     }
     // Back as the system's back rather than as a key: from Android 13 an app that takes part in
     // predictive back is not sent the back key at all, only the back callback. Registered after
@@ -61,7 +63,7 @@ fun Modifier.televisionTextInput(shape: Shape = RectangleShape): Modifier {
     }
     return this
         .clip(shape)
-        .televisionFocusShape(shape)
+        .televisionFocusShape(shape, includeDescendants = true)
         .focusRequester(item)
         .clickable { editing = true }
         .onPreviewKeyEvent { event ->

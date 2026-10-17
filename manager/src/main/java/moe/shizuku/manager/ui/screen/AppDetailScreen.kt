@@ -481,6 +481,8 @@ fun AppDetailScreen(
                             }
                             item {
                                 SegmentedListItem(
+                                    // The switch is the stop on a TV, not the row around it.
+                                    focusableOnTelevision = false,
                                     headlineContent = { Text(stringResource(R.string.app_battery_unrestricted)) },
                                     supportingContent = { Text(stringResource(R.string.app_battery_unrestricted_note)) },
                                     trailingContent = {
@@ -514,6 +516,8 @@ fun AppDetailScreen(
                         SegmentedColumn {
                             item {
                                 SegmentedListItem(
+                                    // The switch is the stop on a TV, not the row around it.
+                                    focusableOnTelevision = false,
                                     headlineContent = { Text(stringResource(R.string.app_network_block)) },
                                     supportingContent = { Text(stringResource(R.string.app_network_block_note)) },
                                     trailingContent = {
@@ -668,6 +672,8 @@ private fun PermissionRow(
     }
 
     SegmentedListItem(
+        // The switch is the stop on a TV, not the row around it.
+        focusableOnTelevision = false,
         headlineContent = { Text(permission.short) },
         supportingContent = { Text(supporting) },
         trailingContent = {

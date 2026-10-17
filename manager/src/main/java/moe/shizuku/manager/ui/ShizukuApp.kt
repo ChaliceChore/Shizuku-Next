@@ -61,6 +61,7 @@ import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.ToggleButtonShapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -277,9 +278,13 @@ fun ShizukuApp() {
                 // pager is: a detail screen takes the tabs out of the composition, and the way
                 // back should land on the tab it left.
                 var tvTab by rememberSaveable { mutableIntStateOf(0) }
+                // Whether a detail screen has been open, so the TV's tabs coming back after it
+                // put the focus on the page it was opened from rather than on the rail.
+                var tvDetailWasOpen by remember { mutableStateOf(false) }
                 val current = detail
 
                 if (current != null) {
+                    SideEffect { tvDetailWasOpen = true }
                     BackHandler { detail = null }
                     CenteredContent(
                         // A detail screen has no tab bar under it, so it is the one that has
@@ -381,6 +386,7 @@ fun ShizukuApp() {
                         selected = tvTab,
                         onSelect = { tvTab = it },
                         pages = pages,
+                        focusPageFirst = tvDetailWasOpen,
                         onOpenDetail = { detail = it }
                     )
                 } else {
@@ -730,6 +736,7 @@ private fun TelevisionTabs(
     selected: Int,
     onSelect: (Int) -> Unit,
     pages: SaveableStateHolder,
+    focusPageFirst: Boolean,
     onOpenDetail: (Detail) -> Unit
 ) {
     var grantedCount by remember { mutableIntStateOf(0) }
@@ -770,7 +777,23 @@ private fun TelevisionTabs(
             // Two frames: one for the old item to go, one for what replaces it.
             withFrameNanos {}
             withFrameNanos {}
-            if (focusOnPage && !pageFocused) page.requestFocus()
+            // A page with nothing on it to focus gives the rail the focus for good, or every
+            // move along the rail would be taken for the page handing focus away again.
+            if (focusOnPage && !pageFocused && !page.requestFocus()) focusOnPage = false
+        }
+    }
+
+    // Somewhere for the focus to start. With nothing focused the first press only found the
+    // rail on its way somewhere else - down from nowhere landed on Apps - so the open tab takes
+    // the focus as the tabs appear; or the page does, when they appear again because a detail
+    // screen opened from it has closed, which is where the focus was when it opened.
+    LaunchedEffect(Unit) {
+        withFrameNanos {}
+        if (focusPageFirst) {
+            focusOnPage = true
+            if (!page.requestFocus()) railItems[selected].requestFocus()
+        } else {
+            railItems[selected].requestFocus()
         }
     }
 
